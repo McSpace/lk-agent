@@ -75,6 +75,7 @@ async def entrypoint(ctx: JobContext):
                     image_url = await send_to_story_api(chat_messages)
                     logger.info(f"Story API called successfully. Image URL: {image_url}")
 
+                    nonlocal chat_messages
                     chat_messages = chat_messages[4:]
                     participant = await ctx.wait_for_participant()
                     if image_url:
