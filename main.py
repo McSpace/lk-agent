@@ -74,13 +74,15 @@ async def entrypoint(ctx: JobContext):
                 try:
                     image_url = await send_to_story_api(chat_messages)
                     logger.info(f"Story API called successfully. Image URL: {image_url}")
-                    
+
+                    chat_messages = chat_messages[4:]
+                    participant = await ctx.wait_for_participant()
                     if image_url:
                         try:
                             await lkapi.room.update_participant(
                                 UpdateParticipantRequest(
                                     room=ctx.room.name,
-                                    identity=ctx.room.local_participant.identity,
+                                    identity=participant.identity,
                                     attributes={
                                         "image_url": image_url,
                                     },
