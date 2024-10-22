@@ -1,0 +1,178 @@
+import asyncio
+from typing import AsyncIterable, overload
+from aiofile import async_open as open
+from datetime import datetime
+import aiohttp
+import json
+
+from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, JobProcess, cli, llm
+from livekit.agents.pipeline import VoicePipelineAgent
+from livekit.agents.voice_assistant import VoiceAssistant
+from livekit.plugins import deepgram, openai, silero
+from dotenv import load_dotenv
+import livekit.api
+from livekit.api import UpdateParticipantRequest
+
+import logging
+
+load_dotenv()
+
+logger = logging.getLogger("deepgram-stt-demo")
+logger.setLevel(logging.INFO)
+
+def prewarm(proc: JobProcess):
+    proc.userdata["vad"] = silero.VAD.load()
+    proc.userdata["product"] = "New mobile phone iPhone 21. 999$, mind control"
+    logger.info("Set Product")
+
+async def send_to_api(content: str, message_role: str, timestamp: str):
+    async with aiohttp.ClientSession() as session:
+        payload = {
+            "content": content,
+            "message_role": message_role,
+            "timestamp": timestamp
+        }
+        logger.info("====== send_to_api inside=====")
+        async with session.post("https://webhook.site/48f9ef4e-f686-461e-a77f-50f1882006fa", json=payload) as response:
+            return await response.text()
+
+async def send_to_story_api(messages):
+    async with aiohttp.ClientSession() as session:
+        payload = {
+            "messages": messages,
+            "illustration_style": "Watercolor painting with soft, dreamy colors",
+            "main_character": "A curious young explorer with bright eyes and a backpack full of magical items"
+        }
+        logger.info("====== send_to_story_api inside=====")
+        logger.info(f"Sending payload to story API: {payload}")
+        async with session.post("https://storyimagegen-production.up.railway.app/process_chat", json=payload) as response:
+            result = await response.json()
+            logger.info(f"Received response from story API: {result}")
+            return result.get('image_url')
+
+# This function is the entrypoint for the agent.
+async def entrypoint(ctx: JobContext):
+    chat_messages = []
+    lkapi = livekit.api.LiveKitAPI()
+
+    async def before_tts(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
+        logger.info("====== before_tts =====")
+        timestamp = datetime.now().isoformat()
+        #api_queue.put_nowait((text, "agent", timestamp))
+        
+        # Добавляем сообщение агента в список сообщений чата
+        chat_messages.append({"role": "host", "content": text})
+        logger.info(f"Added agent message to chat. Total messages: {len(chat_messages)}")
+        
+        #Если накоплено более 4 сообщений, вызываем новый API
+        if len(chat_messages) > 4:
+            logger.info("More than 4 messages accumulated, calling story API")
+            try:
+                image_url = await send_to_story_api(chat_messages)
+                logger.info(f"Story API called successfully. Image URL: {image_url}")
+                
+                # Обновляем атрибуты участника с полученным URL изображения
+                if image_url:
+                    try:
+                        await lkapi.room.update_participant(
+                            UpdateParticipantRequest(
+                                room=ctx.room.name,
+                                identity=ctx.room.local_participant.identity,
+                                attributes={
+                                    "image_url": image_url,
+                                },
+                            ),
+                        )
+                        logger.info(f"Participant attributes updated with image URL: {image_url}")
+                    except Exception as e:
+                        logger.error(f"Error updating participant attributes: {e}")
+            except Exception as e:
+                logger.error(f"Error calling Story API: {e}")
+        
+        return text
+
+    async def _enrich_with_rag(assistant: VoiceAssistant, chat_ctx: llm.ChatContext):
+        user_msg = chat_ctx.messages[-1]
+    
+    # Create an initial chat context with a system prompt
+    product = ctx.proc.userdata["product"]
+    logger.info("use product")
+    initial_ctx = llm.ChatContext().append(
+        role="system",
+        text="Отвечай только Да или Нет!",
+    )
+
+    # Connect to the LiveKit room
+    await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
+
+    assistant = VoiceAssistant(
+        vad=ctx.proc.userdata["vad"],
+        stt=deepgram.STT(
+            language="ru"
+        ),
+        llm=openai.LLM(
+            model="gpt-4o-mini",
+        ),
+        tts=openai.TTS(),
+        chat_ctx=initial_ctx,
+        before_llm_cb=_enrich_with_rag,
+        before_tts_cb=before_tts,
+    )
+
+    # Start the voice assistant with the LiveKit room
+    assistant.start(ctx.room)
+
+    api_queue = asyncio.Queue()
+
+    @assistant.on("user_speech_committed")
+    def on_user_speech_committed(msg: llm.ChatMessage):
+        logger.info("====== HERE 1 =====")
+        timestamp = datetime.now().isoformat()
+        
+        # Добавляем данные в очередь для отправки на API
+        text = api_queue.put_nowait((msg.content, "user", timestamp))
+        logger.info(text)
+        
+        # Добавляем сообщение пользователя в список сообщений чата
+        chat_messages.append({"role": "player", "content": msg.content})
+        logger.info(f"Added user message to chat. Total messages: {len(chat_messages)}")
+
+    async def send_to_api_worker():
+        logger.info("====== send_to_api_worker =====")
+        while True:
+            content, message_role, timestamp = await api_queue.get()
+            if isinstance(content, str):
+                logger.info(f"content is a string: {content}")
+            else:
+                logger.info(f"content is not a string, it's a {type(content)}")
+            try:
+                logger.info(f"====== send_to_api {message_role}: {content}")
+                await send_to_api(content, message_role, timestamp)
+            except Exception as e:
+                logger.error(f"Error sending data to API: {e}")
+            finally:
+                api_queue.task_done()
+
+    api_task = asyncio.create_task(send_to_api_worker())
+
+    async def finish_queue():
+        await api_queue.join()
+        try:
+            await api_task
+        except asyncio.CancelledError:
+            pass
+
+    ctx.add_shutdown_callback(finish_queue)        
+
+    await asyncio.sleep(1)
+
+    # Greets the user with an initial message
+    await assistant.say("Алло! Кто это?", allow_interruptions=True)
+
+
+if __name__ == "__main__":
+    # Initialize the worker with the entrypoint
+    cli.run_app(WorkerOptions(
+        shutdown_process_timeout=5,
+        entrypoint_fnc=entrypoint, 
+        prewarm_fnc=prewarm))
