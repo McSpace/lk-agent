@@ -71,6 +71,7 @@ async def entrypoint(ctx: JobContext):
         if len(chat_messages) > 4:
             logger.info("More than 4 messages accumulated, calling story API")
             async def handle_story_api():
+                nonlocal chat_messages
                 try:
                     image_url = await send_to_story_api(chat_messages)
                     logger.info(f"Story API called successfully. Image URL: {image_url}")
