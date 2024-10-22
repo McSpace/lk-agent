@@ -60,7 +60,10 @@ async def entrypoint(ctx: JobContext):
         timestamp = datetime.now().isoformat()
         #api_queue.put_nowait((text, "agent", timestamp))
         
-        # Добавляем сообщение агента в список сообщений чата
+        # Ensure text is a string before adding to chat messages
+        if isinstance(text, AsyncIterable):
+            text = ''.join([chunk async for chunk in text])
+        
         chat_messages.append({"role": "host", "content": text})
         logger.info(f"Added agent message to chat. Total messages: {len(chat_messages)}")
         
