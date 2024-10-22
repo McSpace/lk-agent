@@ -68,7 +68,7 @@ async def entrypoint(ctx: JobContext):
         logger.info(f"Added agent message to chat. Total messages: {len(chat_messages)}")
         
         #Если накоплено более 4 сообщений, вызываем новый API
-        if len(chat_messages) > 4:
+        if (len(chat_messages)  ) % 4 == 0:
             logger.info("More than 4 messages accumulated, calling story API")
             async def handle_story_api():
                 nonlocal chat_messages
@@ -76,22 +76,33 @@ async def entrypoint(ctx: JobContext):
                     image_url = await send_to_story_api(chat_messages)
                     logger.info(f"Story API called successfully. Image URL: {image_url}")
 
-                    chat_messages = chat_messages[4:]
+                    #chat_messages = chat_messages[4:]
                     participant = await ctx.wait_for_participant()
+                    #participant = ctx.room.local_participant
                     if image_url:
                         try:
-                            await lkapi.room.update_participant(
-                                UpdateParticipantRequest(
-                                    room=ctx.room.name,
-                                    identity=participant.identity,
-                                    attributes={
-                                        "image_url": image_url,
-                                    },
-                                ),
-                            )
-                            logger.info(f"Participant attributes updated with image URL: {image_url}")
+                            logger.info("====== PUSH DATA ===== ")
+                            await ctx.room.local_participant.publish_data(image_url,
+                                            reliable=True,
+                                            destination_identities=[participant.identity],
+                                            topic="topic1")  
+                            logger.info(f"====== PUSH DATA SENT to {participant.identity} ===== ")
+
+
+                            # logger.info("====== ATRIBS ===== ")
+                            # await lkapi.room.update_participant(
+                            #     UpdateParticipantRequest(
+                            #         room=ctx.room.name,
+                            #         identity=participant.identity,
+                            #         # identity=ctx.room.local_participant.identity,
+                            #         attributes={
+                            #             "image_url": image_url,
+                            #         },
+                            #     ),
+                            # )
+                            # logger.info(f"Participant {participant.identity} attributes updated with image URL: {image_url}, attributes: {participant.attributes}")
                         except Exception as e:
-                            logger.error(f"Error updating participant attributes: {e}")
+                            logger.error(f"Error updating participant {participant.name} attributes: {e}")
                 except Exception as e:
                     logger.error(f"Error calling Story API: {e}")
             
@@ -108,7 +119,11 @@ async def entrypoint(ctx: JobContext):
     logger.info("use product")
     initial_ctx = llm.ChatContext().append(
         role="system",
-        text="Отвечай только Да или Нет!",
+        # text="Отвечай только Да или Нет!",
+        text = """
+        Ты ведущий текстовой ролевой игры.
+        Пользователь описывает свои действия, а ты описывешь реакцию игрового мира и персонажей в нём.
+        """
     )
 
     # Connect to the LiveKit room
@@ -135,7 +150,7 @@ async def entrypoint(ctx: JobContext):
 
     @assistant.on("user_speech_committed")
     def on_user_speech_committed(msg: llm.ChatMessage):
-        logger.info("====== HERE 1 =====")
+       # logger.info("====== HERE 1 =====")
         timestamp = datetime.now().isoformat()
         
         # Добавляем данные в очередь для отправки на API
@@ -144,23 +159,23 @@ async def entrypoint(ctx: JobContext):
         
         # Добавляем сообщение пользователя в список сообщений чата
         chat_messages.append({"role": "player", "content": msg.content})
-        logger.info(f"Added user message to chat. Total messages: {len(chat_messages)}")
+        #logger.info(f"Added user message to chat. Total messages: {len(chat_messages)}")
 
     async def send_to_api_worker():
-        logger.info("====== send_to_api_worker =====")
+        #logger.info("====== send_to_api_worker =====")
         while True:
             content, message_role, timestamp = await api_queue.get()
             if isinstance(content, str):
-                logger.info(f"content is a string: {content}")
-            else:
-                logger.info(f"content is not a string, it's a {type(content)}")
-            try:
-                logger.info(f"====== send_to_api {message_role}: {content}")
-                await send_to_api(content, message_role, timestamp)
-            except Exception as e:
-                logger.error(f"Error sending data to API: {e}")
-            finally:
-                api_queue.task_done()
+            #     logger.info(f"content is a string: {content}")
+            # else:
+            #     logger.info(f"content is not a string, it's a {type(content)}")
+                try:
+                    logger.info(f"====== send_to_api {message_role}: {content}")
+                    await send_to_api(content, message_role, timestamp)
+                except Exception as e:
+                    logger.error(f"Error sending data to API: {e}")
+                finally:
+                    api_queue.task_done()
 
     api_task = asyncio.create_task(send_to_api_worker())
 

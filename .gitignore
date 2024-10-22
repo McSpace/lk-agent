@@ -1,0 +1,6 @@
+.aider*
+.env
+venv/
+tmp/
+*.sh
+tmp.json
