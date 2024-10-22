@@ -70,27 +70,30 @@ async def entrypoint(ctx: JobContext):
         #Если накоплено более 4 сообщений, вызываем новый API
         if len(chat_messages) > 4:
             logger.info("More than 4 messages accumulated, calling story API")
-            try:
-                image_url = await send_to_story_api(chat_messages)
-                logger.info(f"Story API called successfully. Image URL: {image_url}")
-                
-                # Обновляем атрибуты участника с полученным URL изображения
-                if image_url:
-                    try:
-                        await lkapi.room.update_participant(
-                            UpdateParticipantRequest(
-                                room=ctx.room.name,
-                                identity=ctx.room.local_participant.identity,
-                                attributes={
-                                    "image_url": image_url,
-                                },
-                            ),
-                        )
-                        logger.info(f"Participant attributes updated with image URL: {image_url}")
-                    except Exception as e:
-                        logger.error(f"Error updating participant attributes: {e}")
-            except Exception as e:
-                logger.error(f"Error calling Story API: {e}")
+            async def handle_story_api():
+                try:
+                    image_url = await send_to_story_api(chat_messages)
+                    logger.info(f"Story API called successfully. Image URL: {image_url}")
+                    
+                    if image_url:
+                        try:
+                            await lkapi.room.update_participant(
+                                UpdateParticipantRequest(
+                                    room=ctx.room.name,
+                                    identity=ctx.room.local_participant.identity,
+                                    attributes={
+                                        "image_url": image_url,
+                                    },
+                                ),
+                            )
+                            logger.info(f"Participant attributes updated with image URL: {image_url}")
+                        except Exception as e:
+                            logger.error(f"Error updating participant attributes: {e}")
+                except Exception as e:
+                    logger.error(f"Error calling Story API: {e}")
+            
+            # Запускаем обработку API в фоновом режиме
+            asyncio.create_task(handle_story_api())
         
         return text
 
