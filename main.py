@@ -40,8 +40,8 @@ async def send_to_story_api(messages):
     async with aiohttp.ClientSession() as session:
         payload = {
             "messages": messages,
-            "illustration_style": "Watercolor painting with soft, dreamy colors",
-            "main_character": "A curious young explorer with bright eyes and a backpack full of magical items"
+            "illustration_style": "A medieval book illustration, without borders or frames. The illustration style mirrors that of illuminated manuscripts, with vibrant colors, intricate details, and a slightly flattened perspective that allows for a comprehensive view of the scene. Touches of gold leaf accentuate important elements, adding a magical quality to the scene. The image extends to the edges, fully immersing the viewer in the setting.",
+            "main_character": "Our hero is a young man in his late twenties or early thirties with a strong build, short dark hair, and a clean-shaven face. He wears a striking red cloak over practical leather armor. His youthful yet experienced face suggests a mix of enthusiasm and earned wisdom."
         }
         logger.info("====== send_to_story_api inside=====")
         logger.info(f"Sending payload to story API: {payload}")
@@ -69,11 +69,11 @@ async def entrypoint(ctx: JobContext):
         
         #Если накоплено более 4 сообщений, вызываем новый API
         if (len(chat_messages)  ) > 1:
-            logger.info("More than 4 messages accumulated, calling story API")
+            # logger.info("More than 4 messages accumulated, calling story API")
             async def handle_story_api():
-                nonlocal chat_messages
+                chat_messages
                 try:
-                    image_url = await send_to_story_api(chat_messages)
+                    image_url = await send_to_story_api(chat_messages[-4:])
                     logger.info(f"Story API called successfully. Image URL: {image_url}")
 
                     #chat_messages = chat_messages[4:]
@@ -81,26 +81,13 @@ async def entrypoint(ctx: JobContext):
                     #participant = ctx.room.local_participant
                     if image_url:
                         try:
-                            logger.info("====== PUSH DATA ===== ")
+                            # logger.info("====== PUSH DATA ===== ")
                             await ctx.room.local_participant.publish_data(image_url,
                                             reliable=True,
                                             destination_identities=[participant.identity],
                                             topic="topic1")  
                             logger.info(f"====== PUSH DATA SENT to {participant.identity} ===== ")
 
-
-                            # logger.info("====== ATRIBS ===== ")
-                            # await lkapi.room.update_participant(
-                            #     UpdateParticipantRequest(
-                            #         room=ctx.room.name,
-                            #         identity=participant.identity,
-                            #         # identity=ctx.room.local_participant.identity,
-                            #         attributes={
-                            #             "image_url": image_url,
-                            #         },
-                            #     ),
-                            # )
-                            # logger.info(f"Participant {participant.identity} attributes updated with image URL: {image_url}, attributes: {participant.attributes}")
                         except Exception as e:
                             logger.error(f"Error updating participant {participant.name} attributes: {e}")
                 except Exception as e:
@@ -122,7 +109,11 @@ async def entrypoint(ctx: JobContext):
         # text="Отвечай только Да или Нет!",
         text = """
         Ты ведущий текстовой ролевой игры.
-        Пользователь описывает свои действия, а ты описывешь реакцию игрового мира и персонажей в нём.
+        Пользователь описывает свои действия, а ты описывешь реакцию игрового мира и персонажей в нём. 
+        Не придумывай за игрока его дейчствия. 
+
+        Игровой мир:
+        Средневековый мир, где есть люди, драконы и магия.
         """
     )
 
