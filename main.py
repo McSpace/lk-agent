@@ -68,7 +68,7 @@ async def entrypoint(ctx: JobContext):
         logger.info(f"Added agent message to chat. Total messages: {len(chat_messages)}")
         
         #Если накоплено более 4 сообщений, вызываем новый API
-        if (len(chat_messages)  ) % 4 == 0:
+        if (len(chat_messages)  ) > 1:
             logger.info("More than 4 messages accumulated, calling story API")
             async def handle_story_api():
                 nonlocal chat_messages
