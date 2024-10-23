@@ -73,7 +73,7 @@ async def entrypoint(ctx: JobContext):
             async def handle_story_api():
                 chat_messages
                 try:
-                    image_url = await send_to_story_api(chat_messages[-4:])
+                    image_url = await send_to_story_api(chat_messages[-1:])
                     logger.info(f"Story API called successfully. Image URL: {image_url}")
 
                     #chat_messages = chat_messages[4:]
