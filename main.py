@@ -189,7 +189,7 @@ async def entrypoint(ctx: JobContext):
     await asyncio.sleep(1)
 
     # Greets the user with an initial message
-    await assistant.say("Алло! Кто это?", allow_interruptions=True)
+    await assistant.say("Приветсвую, коллеги. Я готов к работе.", allow_interruptions=True)
 
 
 if __name__ == "__main__":
