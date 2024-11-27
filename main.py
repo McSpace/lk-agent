@@ -159,6 +159,13 @@ async def entrypoint(ctx: JobContext):
         chat_messages.append({"role": "player", "content": msg.content})
         #logger.info(f"Added user message to chat. Total messages: {len(chat_messages)}")
 
+        if msg.content.startswith("Агент"):
+            logger.info("АГЕНТ ДЕТЕСТЕД")
+            raise Exception(
+                        f"АГЕНТ ДЕТЕСТЕД"
+                    )
+            
+
     async def send_to_api_worker():
         #logger.info("====== send_to_api_worker =====")
         while True:
