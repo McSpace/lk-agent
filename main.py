@@ -22,8 +22,8 @@ logger.setLevel(logging.INFO)
 
 def prewarm(proc: JobProcess):
     proc.userdata["vad"] = silero.VAD.load()
-    proc.userdata["product"] = "New mobile phone iPhone 21. 999$, mind control"
-    logger.info("Set Product")
+    #proc.userdata["product"] = "New mobile phone iPhone 21. 999$, mind control"
+    #logger.info("Set Product")
 
 async def send_to_api(content: str, message_role: str, timestamp: str):
     async with aiohttp.ClientSession() as session:
@@ -108,20 +108,13 @@ async def entrypoint(ctx: JobContext):
         role="system",
         # text="Отвечай только Да или Нет!",
         text = """
-        Ты Synco, корпоративный ассистент.
-        Твои задачи:
-        - Собирать все знания о продукте и компании
-        - Помогать сотрудникам компании в решении их задач
-        - Быть в курсе всех новостей рынка, анализировать их и делиться сотрудникам
-        """
-        #         text = """
-        # Ты ведущий текстовой ролевой игры.
-        # Пользователь описывает свои действия, а ты описывешь реакцию игрового мира и персонажей в нём. 
-        # Не придумывай за игрока его дейчствия. 
+        Ты ведущий текстовой ролевой игры.
+        Пользователь описывает свои действия, а ты описывешь реакцию игрового мира и персонажей в нём. 
+        Не придумывай за игрока его дейчствия. 
 
-        # Игровой мир:
-        # Средневековый мир, где есть люди, драконы и магия.
-        # """
+        Игровой мир:
+        Средневековый мир, где есть люди, драконы и магия.
+        """
     )
 
     # Connect to the LiveKit room
@@ -159,13 +152,6 @@ async def entrypoint(ctx: JobContext):
         chat_messages.append({"role": "player", "content": msg.content})
         #logger.info(f"Added user message to chat. Total messages: {len(chat_messages)}")
 
-        if msg.content.startswith("Агент"):
-            logger.info("АГЕНТ ДЕТЕСТЕД")
-            raise Exception(
-                        f"АГЕНТ ДЕТЕСТЕД"
-                    )
-            
-
     async def send_to_api_worker():
         #logger.info("====== send_to_api_worker =====")
         while True:
@@ -196,7 +182,7 @@ async def entrypoint(ctx: JobContext):
     await asyncio.sleep(1)
 
     # Greets the user with an initial message
-    await assistant.say("Приветсвую, коллеги. Я готов к работе.", allow_interruptions=True)
+    await assistant.say("Алло! Кто это?", allow_interruptions=True)
 
 
 if __name__ == "__main__":
