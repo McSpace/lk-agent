@@ -21,8 +21,8 @@ logger.setLevel(logging.INFO)
 
 def prewarm(proc: JobProcess):
     proc.userdata["vad"] = silero.VAD.load()
-    proc.userdata["product"] = "New mobile phone iPhone 21. 999$, mind control"
-    logger.info("Set Product")
+    # proc.userdata["product"] = "New mobile phone iPhone 21. 999$, mind control"
+    # logger.info("Set Product")
 
 async def _forward_transcription(
     stt_stream: stt.SpeechStream, stt_forwarder: transcription.STTSegmentsForwarder

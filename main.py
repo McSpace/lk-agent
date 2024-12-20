@@ -102,8 +102,8 @@ async def entrypoint(ctx: JobContext):
         user_msg = chat_ctx.messages[-1]
     
     # Create an initial chat context with a system prompt
-    product = ctx.proc.userdata["product"]
-    logger.info("use product")
+    # product = ctx.proc.userdata["product"]
+    # logger.info("use product")
     initial_ctx = llm.ChatContext().append(
         role="system",
         # text="Отвечай только Да или Нет!",
