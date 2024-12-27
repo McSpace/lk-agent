@@ -4,6 +4,7 @@ from aiofile import async_open as open
 from datetime import datetime
 import aiohttp
 import json
+import dotenv
 
 from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, JobProcess, cli, llm
 from livekit.agents.pipeline import VoicePipelineAgent
@@ -20,30 +21,44 @@ load_dotenv()
 logger = logging.getLogger("deepgram-stt-demo")
 logger.setLevel(logging.INFO)
 
+# Глобальная переменная для хранения id последнего хода
+last_turn_id = None
+
 def prewarm(proc: JobProcess):
     proc.userdata["vad"] = silero.VAD.load()
     #proc.userdata["product"] = "New mobile phone iPhone 21. 999$, mind control"
     #logger.info("Set Product")
 
-async def send_to_api(content: str, message_role: str, timestamp: str):
+async def send_to_api(content: str, message_role: str, timestamp: str, game_id: str, turn_id: str | None = None):
     async with aiohttp.ClientSession() as session:
-        payload = {
-            "content": content,
-            "message_role": message_role,
-            "timestamp": timestamp
-        }
         logger.info("====== send_to_api inside=====")
-        async with session.post("https://webhook.site/48f9ef4e-f686-461e-a77f-50f1882006fa", json=payload) as response:
-            return await response.text()
+        if message_role == "user":
+            payload = {
+                "game_id": game_id,
+                "player_text": content
+            }        
+            async with session.post(f"{dotenv.get_key('.env', 'STORY_APY_URL')}/turns", json=payload) as response:
+                response_json = await response.json()
+                logger.info(f"API Response: {response_json}")
+                return response_json.get('id')  # Возвращаем id из ответа
+        else:
+            payload = {
+                "content": content,
+                "message_role": message_role,
+                "timestamp": timestamp
+            }        
+            async with session.put("https://webhook.site/48f9ef4e-f686-461e-a77f-50f1882006fa", json=payload) as response:
+                return await response.text()
 
-async def send_to_story_api(messages):
+
+async def send_to_imageGen_api(messages):
     async with aiohttp.ClientSession() as session:
         payload = {
             "messages": messages,
             "illustration_style": "A medieval book illustration, without borders or frames. The illustration style mirrors that of illuminated manuscripts, with vibrant colors, intricate details, and a slightly flattened perspective that allows for a comprehensive view of the scene. Touches of gold leaf accentuate important elements, adding a magical quality to the scene. The image extends to the edges, fully immersing the viewer in the setting.",
             "main_character": "Our hero is a young man in his late twenties or early thirties with a strong build, short dark hair, and a clean-shaven face. He wears a striking red cloak over practical leather armor. His youthful yet experienced face suggests a mix of enthusiasm and earned wisdom."
         }
-        logger.info("====== send_to_story_api inside=====")
+        logger.info("====== send_to_imageGen_api inside=====")
         logger.info(f"Sending payload to story API: {payload}")
         async with session.post("https://storyimagegen-production.up.railway.app/process_chat", json=payload) as response:
             result = await response.json()
@@ -61,15 +76,19 @@ async def entrypoint(ctx: JobContext):
     lkapi = livekit.api.LiveKitAPI()
 
     async def before_tts(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
+        global last_turn_id
         logger.info("====== before_tts =====")
         timestamp = datetime.now().isoformat()
-        #api_queue.put_nowait((text, "agent", timestamp))
         
         # Ensure text is a string before adding to chat messages
         if isinstance(text, AsyncIterable):
             text = ''.join([chunk async for chunk in text])
         
-        chat_messages.append({"role": "host", "content": text})
+        chat_messages.append({
+            "role": "host", 
+            "content": text,
+            "turn_id": last_turn_id  # Добавляем id хода к сообщению
+        })
         logger.info(f"Added agent message to chat. Total messages: {len(chat_messages)}")
         
         #Если накоплено более 4 сообщений, вызываем новый API
@@ -78,7 +97,7 @@ async def entrypoint(ctx: JobContext):
             async def handle_story_api():
                 chat_messages
                 try:
-                    image_url = await send_to_story_api(chat_messages[-1:])
+                    image_url = await send_to_imageGen_api(chat_messages[-1:])
                     logger.info(f"Story API called successfully. Image URL: {image_url}")
 
                     #chat_messages = chat_messages[4:]
@@ -107,11 +126,8 @@ async def entrypoint(ctx: JobContext):
         user_msg = chat_ctx.messages[-1]
     
     # Create an initial chat context with a system prompt
-    # product = ctx.proc.userdata["product"]
-    # logger.info("use product")
     initial_ctx = llm.ChatContext().append(
         role="system",
-        # text="Отвечай только Да или Нет!",
         text = """
         Ты ведущий текстовой ролевой игры.
         Пользователь описывает свои действия, а ты описывешь реакцию игрового мира и персонажей в нём. 
@@ -146,7 +162,6 @@ async def entrypoint(ctx: JobContext):
 
     @assistant.on("user_speech_committed")
     def on_user_speech_committed(msg: llm.ChatMessage):
-       # logger.info("====== HERE 1 =====")
         timestamp = datetime.now().isoformat()
         
         # Добавляем данные в очередь для отправки на API
@@ -155,19 +170,19 @@ async def entrypoint(ctx: JobContext):
         
         # Добавляем сообщение пользователя в список сообщений чата
         chat_messages.append({"role": "player", "content": msg.content})
-        #logger.info(f"Added user message to chat. Total messages: {len(chat_messages)}")
 
     async def send_to_api_worker():
-        #logger.info("====== send_to_api_worker =====")
+        global last_turn_id
         while True:
             content, message_role, timestamp = await api_queue.get()
             if isinstance(content, str):
-            #     logger.info(f"content is a string: {content}")
-            # else:
-            #     logger.info(f"content is not a string, it's a {type(content)}")
                 try:
                     logger.info(f"====== send_to_api {message_role}: {content}")
-                    await send_to_api(content, message_role, timestamp)
+                    game_id = participant.metadata if participant and participant.metadata else "default_game"
+                    turn_id = await send_to_api(content, message_role, timestamp, game_id)
+                    if turn_id:
+                        last_turn_id = turn_id  # Сохраняем id хода
+                        logger.info(f"Saved turn_id: {last_turn_id}")
                 except Exception as e:
                     logger.error(f"Error sending data to API: {e}")
                 finally:
