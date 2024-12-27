@@ -8,7 +8,7 @@ import json
 from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, JobProcess, cli, llm
 from livekit.agents.pipeline import VoicePipelineAgent
 from livekit.agents.voice_assistant import VoiceAssistant
-from livekit.plugins import deepgram, openai, silero, e
+from livekit.plugins import deepgram, openai, silero
 from dotenv import load_dotenv
 import livekit.api
 from livekit.api import UpdateParticipantRequest
