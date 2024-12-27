@@ -8,7 +8,7 @@ import json
 from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, JobProcess, cli, llm
 from livekit.agents.pipeline import VoicePipelineAgent
 from livekit.agents.voice_assistant import VoiceAssistant
-from livekit.plugins import deepgram, openai, silero
+from livekit.plugins import deepgram, openai, silero, e
 from dotenv import load_dotenv
 import livekit.api
 from livekit.api import UpdateParticipantRequest
@@ -52,6 +52,11 @@ async def send_to_story_api(messages):
 
 # This function is the entrypoint for the agent.
 async def entrypoint(ctx: JobContext):
+    participant = await ctx.wait_for_participant()
+    jwt_metadata = participant.metadata
+    logger.info(f"Get jwt_metadata: {jwt_metadata}")
+    logger.info(f"ctx.room: {ctx.room}")
+
     chat_messages = []
     lkapi = livekit.api.LiveKitAPI()
 
