@@ -23,6 +23,7 @@ logger.setLevel(logging.INFO)
 
 # Глобальная переменная для хранения id последнего хода
 last_turn_id = None
+game_id = None
 
 def prewarm(proc: JobProcess):
     proc.userdata["vad"] = silero.VAD.load()
@@ -51,9 +52,10 @@ async def send_to_api(content: str, message_role: str, timestamp: str, game_id: 
                 return await response.text()
 
 
-async def send_to_imageGen_api(messages):
+async def send_to_imageGen_api(messages, turn_id):
     async with aiohttp.ClientSession() as session:
         payload = {
+            "pic_id": turn_id,
             "messages": messages,
             "illustration_style": "A medieval book illustration, without borders or frames. The illustration style mirrors that of illuminated manuscripts, with vibrant colors, intricate details, and a slightly flattened perspective that allows for a comprehensive view of the scene. Touches of gold leaf accentuate important elements, adding a magical quality to the scene. The image extends to the edges, fully immersing the viewer in the setting.",
             "main_character": "Our hero is a young man in his late twenties or early thirties with a strong build, short dark hair, and a clean-shaven face. He wears a striking red cloak over practical leather armor. His youthful yet experienced face suggests a mix of enthusiasm and earned wisdom."
@@ -64,6 +66,31 @@ async def send_to_imageGen_api(messages):
             result = await response.json()
             logger.info(f"Received response from story API: {result}")
             return result.get('image_url')
+            
+async def handle_imagegen_api():
+    chat_messages
+    try:
+        image_url = await send_to_imageGen_api(chat_messages[-1:], last_turn_id)
+        logger.info(f"Story API called successfully. Image URL: {image_url}")
+
+        #chat_messages = chat_messages[4:]
+        participant = await ctx.wait_for_participant()
+        #participant = ctx.room.local_participant
+        if image_url:
+            try:
+                # logger.info("====== PUSH DATA ===== ")
+                await ctx.room.local_participant.publish_data(image_url,
+                                reliable=True,
+                                destination_identities=[participant.identity],
+                                topic="topic1")  
+                logger.info(f"====== PUSH DATA SENT to {participant.identity} ===== ")
+
+            except Exception as e:
+                logger.error(f"Error updating participant {participant.name} attributes: {e}")
+    except Exception as e:
+        logger.error(f"Error calling Story API: {e}")
+
+
 
 # This function is the entrypoint for the agent.
 async def entrypoint(ctx: JobContext):
@@ -78,6 +105,7 @@ async def entrypoint(ctx: JobContext):
     async def before_tts(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
         global last_turn_id
         logger.info("====== before_tts =====")
+        logger.info(f"last_turn_id: {last_turn_id}")
         timestamp = datetime.now().isoformat()
         
         # Ensure text is a string before adding to chat messages
@@ -91,34 +119,13 @@ async def entrypoint(ctx: JobContext):
         })
         logger.info(f"Added agent message to chat. Total messages: {len(chat_messages)}")
         
-        #Если накоплено более 4 сообщений, вызываем новый API
+        #Если накоплено более 1 сообщений, вызываем новый API
         if (len(chat_messages)  ) > 1:
             # logger.info("More than 4 messages accumulated, calling story API")
-            async def handle_story_api():
-                chat_messages
-                try:
-                    image_url = await send_to_imageGen_api(chat_messages[-1:])
-                    logger.info(f"Story API called successfully. Image URL: {image_url}")
 
-                    #chat_messages = chat_messages[4:]
-                    participant = await ctx.wait_for_participant()
-                    #participant = ctx.room.local_participant
-                    if image_url:
-                        try:
-                            # logger.info("====== PUSH DATA ===== ")
-                            await ctx.room.local_participant.publish_data(image_url,
-                                            reliable=True,
-                                            destination_identities=[participant.identity],
-                                            topic="topic1")  
-                            logger.info(f"====== PUSH DATA SENT to {participant.identity} ===== ")
-
-                        except Exception as e:
-                            logger.error(f"Error updating participant {participant.name} attributes: {e}")
-                except Exception as e:
-                    logger.error(f"Error calling Story API: {e}")
             
             # Запускаем обработку API в фоновом режиме
-            asyncio.create_task(handle_story_api())
+            asyncio.create_task(handle_imagegen_api())
         
         return text
 
@@ -141,6 +148,8 @@ async def entrypoint(ctx: JobContext):
     # Connect to the LiveKit room
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
 
+    logger.info(f"====== ctx.room = {ctx.room} =====")
+
     assistant = VoiceAssistant(
         vad=ctx.proc.userdata["vad"],
         stt=deepgram.STT(
@@ -159,6 +168,14 @@ async def entrypoint(ctx: JobContext):
     assistant.start(ctx.room)
 
     api_queue = asyncio.Queue()
+    logger.info("====== entrypoint =====")
+    participant = await ctx.wait_for_participant()
+    logger.info(f"Get participant: {participant}")
+
+    game_id = participant.metadata if participant and participant.metadata else "default_game"
+    logger.info(f"Get game_id participant.metadata: {game_id}")
+
+    # Load game data from story-API    
 
     @assistant.on("user_speech_committed")
     def on_user_speech_committed(msg: llm.ChatMessage):
