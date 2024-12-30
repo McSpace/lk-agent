@@ -42,9 +42,9 @@ class Game(BaseModel):
 class GameData(BaseModel):
     world_description: str
     character_description: str
-    character_appearance: str
-    image_style_prompt: str
-    latest_summary: str
+    character_appearance: Optional[str]
+    image_style_prompt: Optional[str]
+    latest_summary: Optional[str]
     # turns: List[str]
     game: Game
     user_lang: str
@@ -106,9 +106,9 @@ async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
             logger.info(f"Received response from story API: {result}")
             return result.get('image_url')
             
-async def handle_imagegen_api(chat_messages, last_turn_id, ctx):
+async def handle_imagegen_api(chat_messages, last_turn_id, ctx, game_data):
     try:
-        image_url = await send_to_imageGen_api(chat_messages[-1:], last_turn_id)
+        image_url = await send_to_imageGen_api(chat_messages[-1:], last_turn_id, game_data)
         logger.info(f"Story API called successfully. Image URL: {image_url}")
 
         participant = await ctx.wait_for_participant()
@@ -153,7 +153,7 @@ async def entrypoint(ctx: JobContext):
         #Если накоплено более 1 сообщений, вызываем новый API
         if (len(chat_messages)) > 1:
             # Запускаем обработку API в фоновом режиме
-            asyncio.create_task(handle_imagegen_api(chat_messages, last_turn_id, ctx))
+            asyncio.create_task(handle_imagegen_api(chat_messages, last_turn_id, ctx, game_data))
         
         return text
 
