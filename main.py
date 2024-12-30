@@ -69,9 +69,9 @@ def prewarm(proc: JobProcess):
     #proc.userdata["product"] = "New mobile phone iPhone 21. 999$, mind control"
     #logger.info("Set Product")
 
-async def send_to_api(content: str, message_role: str, timestamp: str, game_id: str, turn_id: str | None = None):
+async def send_to_api(content: str, message_role: str, game_id: str, turn_id: str | None = None):
     async with aiohttp.ClientSession() as session:
-        logger.info("====== send_to_api inside=====")
+        logger.info("====== send_to_api inside {message_role} =====")
         if message_role == "user":
             payload = {
                 "game_id": game_id,
@@ -82,13 +82,14 @@ async def send_to_api(content: str, message_role: str, timestamp: str, game_id: 
                 logger.info(f"API Response: {response_json}")
                 return response_json.get('id')  # Возвращаем id из ответа
         else:
+            logger.info(f"====== send_to_api not user - {message_role}: {content}")
             payload = {
                 "gm_response": content
             }        
             async with session.put(f"{os.getenv('STORY_APY_URL')}/turns/{turn_id}", json=payload) as response:
                 response_json = await response.json()
                 logger.info(f"API Response: {response_json}")
-                return response_json.get('gm_response')  # Возвращаем id из ответа
+                return turn_id
 
 
 async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
@@ -148,6 +149,9 @@ async def entrypoint(ctx: JobContext):
             "content": text,
             "turn_id": last_turn_id  # Добавляем id хода к сообщению
         })
+
+        api_queue.put_nowait(text, "host")
+
         logger.info(f"Added agent message to chat. Total messages: {len(chat_messages)}")
         
         #Если накоплено более 1 сообщений, вызываем новый API
@@ -174,7 +178,8 @@ async def entrypoint(ctx: JobContext):
             text = f"""
             Ты ведущий текстовой ролевой игры.
             Пользователь описывает свои действия, а ты описывешь реакцию игрового мира и персонажей в нём. 
-            Не придумывай за игрока его дейчствия.
+            Не придумывай за игрока его дейчствия. Используй своё воображение и креативность.
+            Отвечай на '{game_data.user_lang}' языке.
 
             Игровой мир:
             {game_data.world_description}
@@ -223,10 +228,9 @@ async def entrypoint(ctx: JobContext):
 
     @assistant.on("user_speech_committed")
     def on_user_speech_committed(msg: llm.ChatMessage):
-        timestamp = datetime.now().isoformat()
         
         # Добавляем данные в очередь для отправки на API
-        text = api_queue.put_nowait((msg.content, "user", timestamp))
+        text = api_queue.put_nowait((msg.content, "user"))
         logger.info(text)
         
         # Добавляем сообщение пользователя в список сообщений чата
@@ -240,7 +244,7 @@ async def entrypoint(ctx: JobContext):
             if isinstance(content, str):
                 try:
                     logger.info(f"====== send_to_api {message_role}: {content}")
-                    turn_id = await send_to_api(content, message_role, timestamp, game_id)
+                    turn_id = await send_to_api(content, message_role,  game_id, last_turn_id)
                     if turn_id:
                         last_turn_id = turn_id  # Сохраняем id хода
                         logger.info(f"Saved turn_id: {last_turn_id}")
