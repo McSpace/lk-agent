@@ -150,7 +150,7 @@ async def entrypoint(ctx: JobContext):
             "turn_id": last_turn_id  # Добавляем id хода к сообщению
         })
 
-        api_queue.put_nowait(text, "host")
+        api_queue.put_nowait((text, "host"))
 
         logger.info(f"Added agent message to chat. Total messages: {len(chat_messages)}")
         
