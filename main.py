@@ -15,15 +15,50 @@ import livekit.api
 from livekit.api import UpdateParticipantRequest
 
 import logging
+from uuid import UUID
+from pydantic import BaseModel
+from typing import Dict, List, Optional
 
 load_dotenv()
 
 logger = logging.getLogger("deepgram-stt-demo")
 logger.setLevel(logging.INFO)
 
-# Глобальная переменная для хранения id последнего хода
-last_turn_id = None
-game_id = None
+# Models for Story API
+class Game(BaseModel):
+    title: str
+    settings: Dict
+    id: UUID
+    world_id: UUID
+    user_id: UUID
+    character_id: UUID
+    status: str
+    last_turn_number: int
+    created_at: datetime
+    updated_at: datetime
+
+class GameData(BaseModel):
+    world_description: str
+    character_description: str
+    latest_summary: str
+    turns: List[str]
+    game: Game
+    user_lang: str
+
+async def get_game_data(game_id: str) -> Optional[GameData]:
+    """Fetch game data from Story API"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = f"{dotenv.get_key('.env', 'STORY_APY_URL')}/games/{game_id}"
+            async with session.get(url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return GameData.parse_obj(data)
+                logger.error(f"Failed to fetch game data: {response.status}")
+                return None
+    except Exception as e:
+        logger.error(f"Error fetching game data: {e}")
+        return None
 
 def prewarm(proc: JobProcess):
     proc.userdata["vad"] = silero.VAD.load()
@@ -44,12 +79,12 @@ async def send_to_api(content: str, message_role: str, timestamp: str, game_id: 
                 return response_json.get('id')  # Возвращаем id из ответа
         else:
             payload = {
-                "content": content,
-                "message_role": message_role,
-                "timestamp": timestamp
+                "gm_response": content
             }        
-            async with session.put("https://webhook.site/48f9ef4e-f686-461e-a77f-50f1882006fa", json=payload) as response:
-                return await response.text()
+            async with session.put(f"{dotenv.get_key('.env', 'STORY_APY_URL')}/turns/{turn_id}", json=payload) as response:
+                response_json = await response.json()
+                logger.info(f"API Response: {response_json}")
+                return response_json.get('gm_response')  # Возвращаем id из ответа
 
 
 async def send_to_imageGen_api(messages, turn_id):
@@ -67,18 +102,14 @@ async def send_to_imageGen_api(messages, turn_id):
             logger.info(f"Received response from story API: {result}")
             return result.get('image_url')
             
-async def handle_imagegen_api():
-    chat_messages
+async def handle_imagegen_api(chat_messages, last_turn_id, ctx):
     try:
         image_url = await send_to_imageGen_api(chat_messages[-1:], last_turn_id)
         logger.info(f"Story API called successfully. Image URL: {image_url}")
 
-        #chat_messages = chat_messages[4:]
         participant = await ctx.wait_for_participant()
-        #participant = ctx.room.local_participant
         if image_url:
             try:
-                # logger.info("====== PUSH DATA ===== ")
                 await ctx.room.local_participant.publish_data(image_url,
                                 reliable=True,
                                 destination_identities=[participant.identity],
@@ -90,20 +121,16 @@ async def handle_imagegen_api():
     except Exception as e:
         logger.error(f"Error calling Story API: {e}")
 
-
-
 # This function is the entrypoint for the agent.
 async def entrypoint(ctx: JobContext):
-    # participant = await ctx.wait_for_participant()
-    # jwt_metadata = participant.metadata
-    # logger.info(f"Get jwt_metadata: {jwt_metadata}")
     logger.info(f"ctx.room: {ctx.room}")
 
     chat_messages = []
+    last_turn_id = None
     lkapi = livekit.api.LiveKitAPI()
 
     async def before_tts(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
-        global last_turn_id
+        nonlocal last_turn_id
         logger.info("====== before_tts =====")
         logger.info(f"last_turn_id: {last_turn_id}")
         timestamp = datetime.now().isoformat()
@@ -120,35 +147,54 @@ async def entrypoint(ctx: JobContext):
         logger.info(f"Added agent message to chat. Total messages: {len(chat_messages)}")
         
         #Если накоплено более 1 сообщений, вызываем новый API
-        if (len(chat_messages)  ) > 1:
-            # logger.info("More than 4 messages accumulated, calling story API")
-
-            
+        if (len(chat_messages)) > 1:
             # Запускаем обработку API в фоновом режиме
-            asyncio.create_task(handle_imagegen_api())
+            asyncio.create_task(handle_imagegen_api(chat_messages, last_turn_id, ctx))
         
         return text
-
-    async def _enrich_with_rag(assistant: VoiceAssistant, chat_ctx: llm.ChatContext):
-        user_msg = chat_ctx.messages[-1]
-    
-    # Create an initial chat context with a system prompt
-    initial_ctx = llm.ChatContext().append(
-        role="system",
-        text = """
-        Ты ведущий текстовой ролевой игры.
-        Пользователь описывает свои действия, а ты описывешь реакцию игрового мира и персонажей в нём. 
-        Не придумывай за игрока его дейчствия. 
-
-        Игровой мир:
-        Средневековый мир, где есть люди, драконы и магия.
-        """
-    )
 
     # Connect to the LiveKit room
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
 
     logger.info(f"====== ctx.room = {ctx.room} =====")
+    
+    # Load game data from story-API   
+    game_id = ctx.room.name
+    
+    # Fetch game data
+    game_data = await get_game_data(game_id)
+    if game_data:
+        logger.info(f"Successfully loaded game data for game {game_id}")
+        initial_ctx = llm.ChatContext().append(
+            role="system",
+            text = f"""
+            Ты ведущий текстовой ролевой игры.
+            Пользователь описывает свои действия, а ты описывешь реакцию игрового мира и персонажей в нём. 
+            Не придумывай за игрока его дейчствия.
+
+            Игровой мир:
+            {game_data.world_description}
+
+            Персонаж игрока:
+            {game_data.character_description}
+
+            
+            {f"Текущее состояние игры: {game_data.latest_summary}"  if game_data.latest_summary else ""}
+            """
+        )
+    else:
+        logger.error(f"Failed to load game data for game {game_id}, using default context")
+        initial_ctx = llm.ChatContext().append(
+            role="system",
+            text = """
+            Ты ведущий текстовой ролевой игры.
+            Пользователь описывает свои действия, а ты описывешь реакцию игрового мира и персонажей в нём. 
+            Не придумывай за игрока его дейчствия. 
+
+            Игровой мир:
+            Средневековый мир, где есть люди, драконы и магия.
+            """
+        )
 
     assistant = VoiceAssistant(
         vad=ctx.proc.userdata["vad"],
@@ -160,7 +206,6 @@ async def entrypoint(ctx: JobContext):
         ),
         tts=openai.TTS(),
         chat_ctx=initial_ctx,
-        before_llm_cb=_enrich_with_rag,
         before_tts_cb=before_tts,
     )
 
@@ -168,14 +213,9 @@ async def entrypoint(ctx: JobContext):
     assistant.start(ctx.room)
 
     api_queue = asyncio.Queue()
-    logger.info("====== entrypoint =====")
+
     participant = await ctx.wait_for_participant()
     logger.info(f"Get participant: {participant}")
-
-    game_id = participant.metadata if participant and participant.metadata else "default_game"
-    logger.info(f"Get game_id participant.metadata: {game_id}")
-
-    # Load game data from story-API    
 
     @assistant.on("user_speech_committed")
     def on_user_speech_committed(msg: llm.ChatMessage):
@@ -189,13 +229,13 @@ async def entrypoint(ctx: JobContext):
         chat_messages.append({"role": "player", "content": msg.content})
 
     async def send_to_api_worker():
-        global last_turn_id
+        nonlocal last_turn_id
+        logger.info(f"====== send_to_api_worker knows game_id {game_id} =====")
         while True:
             content, message_role, timestamp = await api_queue.get()
             if isinstance(content, str):
                 try:
                     logger.info(f"====== send_to_api {message_role}: {content}")
-                    game_id = participant.metadata if participant and participant.metadata else "default_game"
                     turn_id = await send_to_api(content, message_role, timestamp, game_id)
                     if turn_id:
                         last_turn_id = turn_id  # Сохраняем id хода
