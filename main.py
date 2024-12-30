@@ -49,7 +49,7 @@ async def get_game_data(game_id: str) -> Optional[GameData]:
     """Fetch game data from Story API"""
     try:
         async with aiohttp.ClientSession() as session:
-            url = f"{dotenv.get_key('.env', 'STORY_APY_URL')}/games/{game_id}"
+            url = f"{os.getenv('STORY_APY_URL')}/games/{game_id}"
             async with session.get(url) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -73,7 +73,7 @@ async def send_to_api(content: str, message_role: str, timestamp: str, game_id: 
                 "game_id": game_id,
                 "player_text": content
             }        
-            async with session.post(f"{dotenv.get_key('.env', 'STORY_APY_URL')}/turns", json=payload) as response:
+            async with session.post(f"{os.getenv('STORY_APY_URL')}/turns", json=payload) as response:
                 response_json = await response.json()
                 logger.info(f"API Response: {response_json}")
                 return response_json.get('id')  # Возвращаем id из ответа
@@ -81,7 +81,7 @@ async def send_to_api(content: str, message_role: str, timestamp: str, game_id: 
             payload = {
                 "gm_response": content
             }        
-            async with session.put(f"{dotenv.get_key('.env', 'STORY_APY_URL')}/turns/{turn_id}", json=payload) as response:
+            async with session.put(f"{os.getenv('STORY_APY_URL')}/turns/{turn_id}", json=payload) as response:
                 response_json = await response.json()
                 logger.info(f"API Response: {response_json}")
                 return response_json.get('gm_response')  # Возвращаем id из ответа
