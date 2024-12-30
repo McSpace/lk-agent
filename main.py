@@ -42,8 +42,10 @@ class Game(BaseModel):
 class GameData(BaseModel):
     world_description: str
     character_description: str
+    character_appearance: str
+    image_style_prompt: str
     latest_summary: str
-    turns: List[str]
+    # turns: List[str]
     game: Game
     user_lang: str
 
@@ -89,13 +91,13 @@ async def send_to_api(content: str, message_role: str, timestamp: str, game_id: 
                 return response_json.get('gm_response')  # Возвращаем id из ответа
 
 
-async def send_to_imageGen_api(messages, turn_id):
+async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
     async with aiohttp.ClientSession() as session:
         payload = {
             "pic_id": turn_id,
             "messages": messages,
-            "illustration_style": "A medieval book illustration, without borders or frames. The illustration style mirrors that of illuminated manuscripts, with vibrant colors, intricate details, and a slightly flattened perspective that allows for a comprehensive view of the scene. Touches of gold leaf accentuate important elements, adding a magical quality to the scene. The image extends to the edges, fully immersing the viewer in the setting.",
-            "main_character": "Our hero is a young man in his late twenties or early thirties with a strong build, short dark hair, and a clean-shaven face. He wears a striking red cloak over practical leather armor. His youthful yet experienced face suggests a mix of enthusiasm and earned wisdom."
+            "illustration_style": game_data.image_style_prompt #"A medieval book illustration, without borders or frames. The illustration style mirrors that of illuminated manuscripts, with vibrant colors, intricate details, and a slightly flattened perspective that allows for a comprehensive view of the scene. Touches of gold leaf accentuate important elements, adding a magical quality to the scene. The image extends to the edges, fully immersing the viewer in the setting.",
+            "main_character":  game_data.character_appearance # "Our hero is a young man in his late twenties or early thirties with a strong build, short dark hair, and a clean-shaven face. He wears a striking red cloak over practical leather armor. His youthful yet experienced face suggests a mix of enthusiasm and earned wisdom."
         }
         logger.info("====== send_to_imageGen_api inside=====")
         logger.info(f"Sending payload to story API: {payload}")
