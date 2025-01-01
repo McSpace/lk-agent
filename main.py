@@ -102,7 +102,10 @@ async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
         }
         logger.info("====== send_to_imageGen_api inside=====")
         logger.info(f"Sending payload to story API: {payload}")
-        async with session.post("https://storyimagegen-production.up.railway.app/process_chat", json=payload) as response:
+        async with session.post("https://storyimagegen-production.up.railway.app/process_chat", 
+                                timeout=60,
+                                json=payload
+                                ) as response:
             result = await response.json()
             logger.info(f"Received response from story API: {result}")
             return result.get('image_url')
@@ -238,9 +241,10 @@ async def entrypoint(ctx: JobContext):
 
     async def send_to_api_worker():
         nonlocal last_turn_id
-        logger.info(f"====== send_to_api_worker knows game_id {game_id} =====")
+        logger.info(f"====== send_to_api_worker knows game_id {game_id} and last_turn_id {last_turn_id} =====")
         while True:
-            content, message_role, timestamp = await api_queue.get()
+            content, message_role = await api_queue.get()
+            logger.info(f"====== from api_queue {message_role}: {content}")
             if isinstance(content, str):
                 try:
                     logger.info(f"====== send_to_api {message_role}: {content}")
