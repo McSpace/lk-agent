@@ -81,7 +81,7 @@ async def send_to_api(content: str, message_role: str, game_id: str, turn_id: st
                 response_json = await response.json()
                 logger.info(f"API Response: {response_json}")
                 return response_json.get('id')  # Возвращаем id из ответа
-        else:
+        elif turn_id:
             logger.info(f"====== send_to_api not user - {message_role}: {content}")
             payload = {
                 "gm_response": content
