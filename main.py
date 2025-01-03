@@ -139,7 +139,7 @@ async def entrypoint(ctx: JobContext):
     lkapi = livekit.api.LiveKitAPI()
 
     async def before_tts(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
-        if (len(chat_messages)) > 1:
+        if (len(chat_messages)) > 0:
             # nonlocal last_turn_id
             logger.info("====== before_tts =====")
             logger.info(f"last_turn_id: {last_turn_id}")
@@ -155,7 +155,7 @@ async def entrypoint(ctx: JobContext):
                 "turn_id": last_turn_id  # Добавляем id хода к сообщению
             })
 
-            user_text = chat_messages[-2]["content"] if len(chat_messages) > 1 else None
+            user_text = chat_messages[-1]["content"] if len(chat_messages) > 1 else None
             logger.info(f"User text in tts : {user_text[:30]}...")
             api_queue.put_nowait((text, "host", user_text))
 
@@ -247,6 +247,7 @@ async def entrypoint(ctx: JobContext):
         
         # Добавляем сообщение пользователя в список сообщений чата
         chat_messages.append({"role": "player", "content": msg.content})
+        logger.info(f"Added player message to chat. Total messages: {len(chat_messages)}")
 
     async def send_to_api_worker():
         nonlocal last_turn_id
