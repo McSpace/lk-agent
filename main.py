@@ -69,27 +69,28 @@ def prewarm(proc: JobProcess):
     #proc.userdata["product"] = "New mobile phone iPhone 21. 999$, mind control"
     #logger.info("Set Product")
 
-async def send_to_api(content: str, message_role: str, game_id: str, turn_id: str | None = None):
+async def send_to_api(content: str, message_role: str, game_id: str, turn_id: str | None = None, user_text: str | None = None):
     async with aiohttp.ClientSession() as session:
         logger.info(f"====== send_to_api inside {message_role} =====")
-        if message_role == "user":
+        if message_role == "host":
             payload = {
                 "game_id": game_id,
-                "player_text": content
+                "player_text": user_text,
+                "gm_response": content
             }        
             async with session.post(f"{os.getenv('STORY_API_URL')}/turns", json=payload) as response:
                 response_json = await response.json()
                 logger.info(f"API Response: {response_json}")
                 return response_json.get('id')  # Возвращаем id из ответа
-        elif turn_id:
-            logger.info(f"====== send_to_api not user - {message_role}: {content}")
-            payload = {
-                "gm_response": content
-            }        
-            async with session.put(f"{os.getenv('STORY_API_URL')}/turns/{turn_id}", json=payload) as response:
-                response_json = await response.json()
-                logger.info(f"API Response: {response_json}")
-                return turn_id
+        # elif turn_id:
+        #     logger.info(f"====== send_to_api not user - {message_role}: {content}")
+        #     payload = {
+        #         "gm_response": content
+        #     }        
+        #     async with session.put(f"{os.getenv('STORY_API_URL')}/turns/{turn_id}", json=payload) as response:
+        #         response_json = await response.json()
+        #         logger.info(f"API Response: {response_json}")
+        #         return turn_id
 
 
 async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
@@ -138,27 +139,30 @@ async def entrypoint(ctx: JobContext):
     lkapi = livekit.api.LiveKitAPI()
 
     async def before_tts(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
-        nonlocal last_turn_id
-        logger.info("====== before_tts =====")
-        logger.info(f"last_turn_id: {last_turn_id}")
-        timestamp = datetime.now().isoformat()
-        
-        # Ensure text is a string before adding to chat messages
-        if isinstance(text, AsyncIterable):
-            text = ''.join([chunk async for chunk in text])
-        
-        chat_messages.append({
-            "role": "host", 
-            "content": text,
-            "turn_id": last_turn_id  # Добавляем id хода к сообщению
-        })
-
-        api_queue.put_nowait((text, "host"))
-
-        logger.info(f"Added agent message to chat. Total messages: {len(chat_messages)}")
-        
-        #Если накоплено более 1 сообщений, вызываем новый API
         if (len(chat_messages)) > 1:
+            # nonlocal last_turn_id
+            logger.info("====== before_tts =====")
+            logger.info(f"last_turn_id: {last_turn_id}")
+            timestamp = datetime.now().isoformat()
+            
+            # Ensure text is a string before adding to chat messages
+            if isinstance(text, AsyncIterable):
+                text = ''.join([chunk async for chunk in text])
+            
+            chat_messages.append({
+                "role": "host", 
+                "content": text,
+                "turn_id": last_turn_id  # Добавляем id хода к сообщению
+            })
+
+            user_text = chat_messages[-2]["content"] if len(chat_messages) > 1 else None
+            logger.info(f"User text in tts : {user_text[:30]}...")
+            api_queue.put_nowait((text, "host", user_text)
+
+            logger.info(f"Added agent message to chat. Total messages: {len(chat_messages)}")
+            
+            #Если накоплено более 1 сообщений, вызываем новый API
+            
             # Запускаем обработку API в фоновом режиме
             asyncio.create_task(handle_imagegen_api(chat_messages, last_turn_id, ctx, game_data))
         
@@ -204,14 +208,14 @@ async def entrypoint(ctx: JobContext):
             Не придумывай за игрока его дейчствия. 
 
             Игровой мир:
-            Средневековый мир, где есть люди, драконы и магия.
+            Средневековый мир, где есть люди и магия.
             """
         )
 
     assistant = VoiceAssistant(
         vad=ctx.proc.userdata["vad"],
         stt=deepgram.STT(
-            language="ru"
+            language=game_data.user_lang
         ),
         llm=openai.LLM(
             model="gpt-4o-mini",
@@ -238,8 +242,8 @@ async def entrypoint(ctx: JobContext):
     def on_user_speech_committed(msg: llm.ChatMessage):
         
         # Добавляем данные в очередь для отправки на API
-        text = api_queue.put_nowait((msg.content, "user"))
-        logger.info(text)
+        # text = api_queue.put_nowait((msg.content, "user"))
+        # logger.info(text)
         
         # Добавляем сообщение пользователя в список сообщений чата
         chat_messages.append({"role": "player", "content": msg.content})
@@ -248,12 +252,12 @@ async def entrypoint(ctx: JobContext):
         nonlocal last_turn_id
         logger.info(f"====== send_to_api_worker knows game_id {game_id} and last_turn_id {last_turn_id} =====")
         while True:
-            content, message_role = await api_queue.get()
+            content, message_role, user_text = await api_queue.get()
             logger.info(f"====== from api_queue {message_role}: {content}")
             if isinstance(content, str):
                 try:
                     logger.info(f"====== send_to_api {message_role}: {content}")
-                    turn_id = await send_to_api(content, message_role,  game_id, last_turn_id)
+                    turn_id = await send_to_api(content, message_role,  game_id, last_turn_id, user_text)
                     if turn_id:
                         last_turn_id = turn_id  # Сохраняем id хода
                         logger.info(f"Saved turn_id: {last_turn_id}")
