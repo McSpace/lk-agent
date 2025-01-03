@@ -157,7 +157,7 @@ async def entrypoint(ctx: JobContext):
 
             user_text = chat_messages[-2]["content"] if len(chat_messages) > 1 else None
             logger.info(f"User text in tts : {user_text[:30]}...")
-            api_queue.put_nowait((text, "host", user_text)
+            api_queue.put_nowait((text, "host", user_text))
 
             logger.info(f"Added agent message to chat. Total messages: {len(chat_messages)}")
             
