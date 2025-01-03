@@ -155,7 +155,7 @@ async def entrypoint(ctx: JobContext):
                 "turn_id": last_turn_id  # Добавляем id хода к сообщению
             })
 
-            user_text = chat_messages[-1]["content"] if len(chat_messages) > 1 else None
+            user_text = chat_messages[-2]["content"] if len(chat_messages) > 1 else None
             logger.info(f"User text in tts : {user_text[:30]}...")
             api_queue.put_nowait((text, "host", user_text))
 
