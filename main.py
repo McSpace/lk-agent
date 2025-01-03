@@ -71,7 +71,7 @@ def prewarm(proc: JobProcess):
 
 async def send_to_api(content: str, message_role: str, game_id: str, turn_id: str | None = None):
     async with aiohttp.ClientSession() as session:
-        logger.info("====== send_to_api inside {message_role} =====")
+        logger.info(f"====== send_to_api inside {message_role} =====")
         if message_role == "user":
             payload = {
                 "game_id": game_id,
@@ -265,18 +265,24 @@ async def entrypoint(ctx: JobContext):
     api_task = asyncio.create_task(send_to_api_worker())
 
     async def finish_queue():
+        logger.info("====== finish_queue =====")
         await api_queue.join()
         try:
             await api_task
         except asyncio.CancelledError:
             pass
 
-    ctx.add_shutdown_callback(finish_queue)        
+    async def on_session_end():
+        logger.info("====== on_session_end. time to generate Preview =====")
+        
+
+    ctx.add_shutdown_callback(finish_queue)      
+    ctx.add_shutdown_callback(on_session_end)  
 
     await asyncio.sleep(1)
 
     # Greets the user with an initial message
-    await assistant.say("Алло! Кто это?", allow_interruptions=True)
+    await assistant.say("Начнём?", allow_interruptions=False)
 
 
 if __name__ == "__main__":
