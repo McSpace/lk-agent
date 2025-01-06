@@ -241,7 +241,7 @@ async def entrypoint(ctx: JobContext):
             model_id="eleven_multilingual_v2",
             voice=voice,
             api_key=os.getenv("ELEVENLABS_API_KEY")
-            )
+        ),
         chat_ctx=initial_ctx,
         before_tts_cb=before_tts,
     )
