@@ -170,7 +170,7 @@ async def entrypoint(ctx: JobContext):
             user_text = chat_messages[-2]["content"] if len(chat_messages) > 1 else None
             logger.info(f"User text in tts : {user_text[:30]}...")
             
-            asyncio.create_task( save_next_turn_api(user_text, text, game_data.game.id) )
+            asyncio.create_task( save_next_turn_api(user_text, text, str(game_data.game.id)) )
             #api_queue.put_nowait((text, "host", user_text))
 
             logger.info(f"Added agent message to chat. Total messages: {len(chat_messages)}")
