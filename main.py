@@ -143,6 +143,12 @@ async def handle_imagegen_api(chat_messages, last_turn_id, ctx, game_data):
         logger.error(f"Error calling Story API: {e}")
 
 # This function is the entrypoint for the agent.
+
+def print_chat_messages(chat_messages):
+    for message in chat_messages:
+        logger.info(f"- {message['role']}: {message['content'][0:30]}...")
+
+
 async def entrypoint(ctx: JobContext):
     logger.info(f"ctx.room: {ctx.room}")
 
@@ -151,24 +157,26 @@ async def entrypoint(ctx: JobContext):
     lkapi = livekit.api.LiveKitAPI()
 
     async def before_tts(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
-        if (len(chat_messages)) > 0:
+        # if (len(chat_messages)) > 0:
             # nonlocal last_turn_id
             logger.info("====== before_tts =====")
-            logger.info(f"last_turn_id: {last_turn_id}")
-            timestamp = datetime.now().isoformat()
-            
+            logger.info(f"chat_messages: {len(chat_messages)}")
+            print_chat_messages(chat_messages)
+
             # Ensure text is a string before adding to chat messages
             if isinstance(text, AsyncIterable):
+                logger.info(f"AsyncIterable")
                 text = ''.join([chunk async for chunk in text])
             
             chat_messages.append({
                 "role": "host", 
                 "content": text,
-                "turn_id": last_turn_id  # Добавляем id хода к сообщению
+                
             })
-
+        
             user_text = chat_messages[-2]["content"] if len(chat_messages) > 1 else None
             logger.info(f"User text in tts : {user_text[:30]}...")
+            logger.info(f"GM Text  : {text[:30]}...")
             
             asyncio.create_task( save_next_turn_api(user_text, text, str(game_data.game.id)) )
             #api_queue.put_nowait((text, "host", user_text))
