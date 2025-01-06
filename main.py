@@ -146,7 +146,7 @@ async def handle_imagegen_api(chat_messages, last_turn_id, ctx, game_data):
 
 def print_chat_messages(chat_messages):
     for message in chat_messages:
-        logger.info(f"- {message['role']}: {message['text'][0:30]}...")
+        logger.info(f"- {message.role}: {message.text[:15] if message.text and len(message.text) >= 15 else message.text}...")
 
 
 async def entrypoint(ctx: JobContext):
