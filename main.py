@@ -11,7 +11,7 @@ import dotenv
 from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, JobProcess, cli, llm
 from livekit.agents.pipeline import VoicePipelineAgent
 from livekit.agents.voice_assistant import VoiceAssistant
-from livekit.plugins import deepgram, openai, silero
+from livekit.plugins import deepgram, openai, silero , elevenlabs
 from dotenv import load_dotenv
 import livekit.api
 from livekit.api import UpdateParticipantRequest
@@ -91,10 +91,10 @@ async def send_to_api(content: str, message_role: str, game_id: str, turn_id: st
         #         return turn_id
 
 
-async def save_next_turn_api(user_text, gm_text, game_data: GameData):
+async def save_next_turn_api(user_text: str, gm_text: str, game_id: str):
     async with aiohttp.ClientSession() as session:
         payload = {
-            "game_id": game_data.game.id,
+            "game_id": game_id,
             "player_text": user_text,
             "gm_response": gm_text
         } 
@@ -170,7 +170,7 @@ async def entrypoint(ctx: JobContext):
             user_text = chat_messages[-2]["content"] if len(chat_messages) > 1 else None
             logger.info(f"User text in tts : {user_text[:30]}...")
             
-            asyncio.create_task( save_next_turn_api(user_text, text, game_data))
+            asyncio.create_task( save_next_turn_api(user_text, text, game_data.game.id) )
             #api_queue.put_nowait((text, "host", user_text))
 
             logger.info(f"Added agent message to chat. Total messages: {len(chat_messages)}")
@@ -234,7 +234,14 @@ async def entrypoint(ctx: JobContext):
         llm=openai.LLM(
             model="gpt-4o-mini",
         ),
-        tts=openai.TTS(),
+        # tts=openai.TTS(),
+        tts = elevenlabs.TTS(
+            model_id="eleven_multilingual_v2",
+            voice: Voice = Voice(
+                id=os.getenv("ELEVENLABS_VOICE_ID")
+                ),
+            api_key=os.getenv("ELEVENLABS_API_KEY")
+            )
         chat_ctx=initial_ctx,
         before_tts_cb=before_tts,
     )
