@@ -153,12 +153,13 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"ctx.room: {ctx.room}")
 
     chat_messages = []
-    last_turn_id = None
+    current_user_text = None
     lkapi = livekit.api.LiveKitAPI()
 
-    async def before_llm(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
+    async def before_llm(assistant: VoicePipelineAgent, chat_context: str | AsyncIterable[str]):
         logger.info("====== before_LLM =====")
-        logger.info(text)
+        current_user_text = chat_context.messages[-1].content if len(chat_context.messages) > 0 else None
+        logger.info(current_user_text)
 
     async def before_tts(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
         # if (len(chat_messages)) > 0:
@@ -178,7 +179,7 @@ async def entrypoint(ctx: JobContext):
             
         })
     
-        user_text = chat_messages[-1]["content"] if len(chat_messages) > 1 else None
+        user_text = current_user_text #chat_messages[-1]["content"] if len(chat_messages) > 1 else None
         logger.info(f"User text in tts : {user_text[:15] if user_text and len(user_text) >= 15 else user_text}...")
         logger.info(f"GM Text  : {text[:15] if text and len(text) >= 15 else text}...")
         
