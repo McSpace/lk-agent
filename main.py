@@ -226,7 +226,9 @@ async def entrypoint(ctx: JobContext):
             """
         )
     voice = elevenlabs.Voice(
-                id=os.getenv("ELEVENLABS_VOICE_ID")
+                id=os.getenv("ELEVENLABS_VOICE_ID"),
+                name="Alice",
+                category="standard",
                 )
     assistant = VoiceAssistant(
         vad=ctx.proc.userdata["vad"],
