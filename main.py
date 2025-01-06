@@ -35,7 +35,6 @@ class Game(BaseModel):
     user_id: UUID
     character_id: UUID
     status: str
-    last_turn_number: int
     created_at: datetime
     updated_at: datetime
 
@@ -45,7 +44,6 @@ class GameData(BaseModel):
     character_appearance: Optional[str]
     image_style_prompt: Optional[str]
     latest_summary: Optional[str]
-    # turns: List[str]
     game: Game
     user_lang: str
 
@@ -93,6 +91,20 @@ async def send_to_api(content: str, message_role: str, game_id: str, turn_id: st
         #         return turn_id
 
 
+async def save_next_turn_api(user_text, gm_text, game_data: GameData):
+    async with aiohttp.ClientSession() as session:
+        payload = {
+            "game_id": game_data.game.id,
+            "player_text": user_text,
+            "gm_response": gm_text
+        } 
+        logger.info("====== save_next_turn_api inside=====")
+        logger.info(f"Sending payload to story API: {payload}")
+        async with session.post(f"{os.getenv('STORY_API_URL')}/turns", json=payload) as response:
+            response_json = await response.json()
+            logger.info(f"API Response: {response_json}")
+            return 
+
 async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
     async with aiohttp.ClientSession() as session:
         payload = {
@@ -110,7 +122,7 @@ async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
             result = await response.json()
             logger.info(f"Received response from story API: {result}")
             return result.get('image_url')
-            
+
 async def handle_imagegen_api(chat_messages, last_turn_id, ctx, game_data):
     try:
         image_url = await send_to_imageGen_api(chat_messages[-1:], last_turn_id, game_data)
@@ -157,7 +169,9 @@ async def entrypoint(ctx: JobContext):
 
             user_text = chat_messages[-2]["content"] if len(chat_messages) > 1 else None
             logger.info(f"User text in tts : {user_text[:30]}...")
-            api_queue.put_nowait((text, "host", user_text))
+            
+            asyncio.create_task( save_next_turn_api(user_text, text, game_data))
+            #api_queue.put_nowait((text, "host", user_text))
 
             logger.info(f"Added agent message to chat. Total messages: {len(chat_messages)}")
             
