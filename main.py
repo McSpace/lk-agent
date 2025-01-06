@@ -159,34 +159,34 @@ async def entrypoint(ctx: JobContext):
     async def before_tts(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
         # if (len(chat_messages)) > 0:
             # nonlocal last_turn_id
-            logger.info("====== before_tts =====")
-            logger.info(f"chat_messages: {len(chat_messages)}")
-            print_chat_messages(chat_messages)
+        logger.info("====== before_tts =====")
+        logger.info(f"chat_messages: {len(chat_messages)}")
+        print_chat_messages(chat_messages)
 
-            # Ensure text is a string before adding to chat messages
-            if isinstance(text, AsyncIterable):
-                logger.info(f"AsyncIterable")
-                text = ''.join([chunk async for chunk in text])
-            
-            chat_messages.append({
-                "role": "host", 
-                "content": text,
-                
-            })
+        # Ensure text is a string before adding to chat messages
+        if isinstance(text, AsyncIterable):
+            logger.info(f"AsyncIterable")
+            text = ''.join([chunk async for chunk in text])
         
-            user_text = chat_messages[-2]["content"] if len(chat_messages) > 1 else None
-            logger.info(f"User text in tts : {user_text[:30]}...")
-            logger.info(f"GM Text  : {text[:30]}...")
+        chat_messages.append({
+            "role": "host", 
+            "content": text,
             
-            asyncio.create_task( save_next_turn_api(user_text, text, str(game_data.game.id)) )
-            #api_queue.put_nowait((text, "host", user_text))
+        })
+    
+        user_text = chat_messages[-2]["content"] if len(chat_messages) > 1 else None
+        logger.info(f"User text in tts : {user_text[:30]}...")
+        logger.info(f"GM Text  : {text[:30]}...")
+        
+        asyncio.create_task( save_next_turn_api(user_text, text, str(game_data.game.id)) )
+        #api_queue.put_nowait((text, "host", user_text))
 
-            logger.info(f"Added agent message to chat. Total messages: {len(chat_messages)}")
-            
-            #Если накоплено более 1 сообщений, вызываем новый API
-            
-            # Запускаем обработку API в фоновом режиме
-            asyncio.create_task(handle_imagegen_api(chat_messages, last_turn_id, ctx, game_data))
+        logger.info(f"Added agent message to chat. Total messages: {len(chat_messages)}")
+        
+        #Если накоплено более 1 сообщений, вызываем новый API
+        
+        # Запускаем обработку API в фоновом режиме
+        asyncio.create_task(handle_imagegen_api(chat_messages, last_turn_id, ctx, game_data))
         
         return text
 
