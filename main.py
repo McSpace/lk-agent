@@ -156,6 +156,10 @@ async def entrypoint(ctx: JobContext):
     last_turn_id = None
     lkapi = livekit.api.LiveKitAPI()
 
+    async def before_llm(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
+        logger.info("====== before_LLM =====")
+        logger.info(text)
+
     async def before_tts(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
         # if (len(chat_messages)) > 0:
             # nonlocal last_turn_id
@@ -254,7 +258,7 @@ async def entrypoint(ctx: JobContext):
             # language=game_data.user_lang
         ),
         chat_ctx=initial_ctx,
-        # before_llm_cb=before_llm,
+        before_llm_cb=before_llm,
         before_tts_cb=before_tts,
 
     )
