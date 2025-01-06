@@ -161,7 +161,7 @@ async def entrypoint(ctx: JobContext):
             # nonlocal last_turn_id
         logger.info("====== before_tts =====")
         logger.info(f"chat_messages: {len(assistant.chat_ctx.messages)}")
-        print_chat_messages(chat_messages)
+        print_chat_messages(assistant.chat_ctx.messages)
 
         # Ensure text is a string before adding to chat messages
         if isinstance(text, AsyncIterable):
