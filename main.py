@@ -277,12 +277,19 @@ async def entrypoint(ctx: JobContext):
 
         logger.info("====== on_agent_speech_committed =====")
         print_chat_messages(assistant.chat_ctx.messages)
+        
+        # Send turn to API
+        if len(assistant.chat_ctx.messages) > 2:
+            user_text = assistant.chat_ctx.messages[-2].content
+            gm_text = assistant.chat_ctx.messages[-1].content
+            asyncio.create_task( save_next_turn_api(user_text, gm_text, str(game_data.game.id)) )
+
 
 
 
     @assistant.on("user_speech_committed")
     def on_user_speech_committed(msg: llm.ChatMessage):
-        
+        logger.info("====== user_speech_committed ===")
         # Добавляем данные в очередь для отправки на API
         # text = api_queue.put_nowait((msg.content, "user"))
         # logger.info(text)
