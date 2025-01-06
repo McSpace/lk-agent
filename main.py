@@ -225,7 +225,7 @@ async def entrypoint(ctx: JobContext):
             Средневековый мир, где есть люди и магия.
             """
         )
-    voice = Voice(
+    voice = elevenlabs.Voice(
                 id=os.getenv("ELEVENLABS_VOICE_ID")
                 )
     assistant = VoiceAssistant(
@@ -240,7 +240,8 @@ async def entrypoint(ctx: JobContext):
         tts = elevenlabs.TTS(
             model_id="eleven_multilingual_v2",
             voice=voice,
-            api_key=os.getenv("ELEVENLABS_API_KEY")
+            api_key=os.getenv("ELEVENLABS_API_KEY"),
+            language=game_data.user_lang
         ),
         chat_ctx=initial_ctx,
         before_tts_cb=before_tts,
