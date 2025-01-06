@@ -166,7 +166,7 @@ async def entrypoint(ctx: JobContext):
             # nonlocal last_turn_id
         logger.info("====== before_tts =====")
         logger.info(f"chat_messages: {len(assistant.chat_ctx.messages)}")
-        print_chat_messages(assistant.chat_ctx.messages)
+        # print_chat_messages(assistant.chat_ctx.messages)
 
         # Ensure text is a string before adding to chat messages
         if isinstance(text, AsyncIterable):
@@ -179,14 +179,14 @@ async def entrypoint(ctx: JobContext):
             
         })
     
-        user_text = current_user_text #chat_messages[-1]["content"] if len(chat_messages) > 1 else None
-        logger.info(f"User text in tts : {user_text[:15] if user_text and len(user_text) >= 15 else user_text}...")
-        logger.info(f"GM Text  : {text[:15] if text and len(text) >= 15 else text}...")
+        # user_text = current_user_text #chat_messages[-1]["content"] if len(chat_messages) > 1 else None
+        # logger.info(f"User text in tts : {user_text[:15] if user_text and len(user_text) >= 15 else user_text}...")
+        # logger.info(f"GM Text  : {text[:15] if text and len(text) >= 15 else text}...")
         
-        asyncio.create_task( save_next_turn_api(user_text, text, str(game_data.game.id)) )
-        #api_queue.put_nowait((text, "host", user_text))
+        # asyncio.create_task( save_next_turn_api(user_text, text, str(game_data.game.id)) )
+        # #api_queue.put_nowait((text, "host", user_text))
 
-        logger.info(f"Added agent message to chat. Total messages: {len(chat_messages)}")
+        # logger.info(f"Added agent message to chat. Total messages: {len(chat_messages)}")
         
         #Если накоплено более 1 сообщений, вызываем новый API
         
@@ -272,9 +272,12 @@ async def entrypoint(ctx: JobContext):
     participant = await ctx.wait_for_participant()
     logger.info(f"Get participant: {participant}")
 
-    # @assistant.on("agent_speech_committed")
-    # def on_agent_speech_committed(msg: llm.ChatMessage):
-    #     logger.info("====== on_agent_speech_committed =====")
+    @assistant.on("agent_speech_committed")
+    def on_agent_speech_committed(msg: llm.ChatMessage):
+
+        logger.info("====== on_agent_speech_committed =====")
+        print_chat_messages(assistant.chat_ctx.messages)
+
 
 
     @assistant.on("user_speech_committed")
