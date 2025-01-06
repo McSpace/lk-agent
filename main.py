@@ -225,7 +225,9 @@ async def entrypoint(ctx: JobContext):
             Средневековый мир, где есть люди и магия.
             """
         )
-
+    voice = Voice(
+                id=os.getenv("ELEVENLABS_VOICE_ID")
+                )
     assistant = VoiceAssistant(
         vad=ctx.proc.userdata["vad"],
         stt=deepgram.STT(
@@ -237,9 +239,7 @@ async def entrypoint(ctx: JobContext):
         # tts=openai.TTS(),
         tts = elevenlabs.TTS(
             model_id="eleven_multilingual_v2",
-            voice: Voice = Voice(
-                id=os.getenv("ELEVENLABS_VOICE_ID")
-                ),
+            voice=voice,
             api_key=os.getenv("ELEVENLABS_API_KEY")
             )
         chat_ctx=initial_ctx,
@@ -288,7 +288,7 @@ async def entrypoint(ctx: JobContext):
                 finally:
                     api_queue.task_done()
 
-    api_task = asyncio.create_task(send_to_api_worker())
+    # api_task = asyncio.create_task(send_to_api_worker())
 
     async def finish_queue():
         logger.info("====== finish_queue =====")
