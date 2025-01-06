@@ -175,8 +175,8 @@ async def entrypoint(ctx: JobContext):
         })
     
         user_text = chat_messages[-2]["content"] if len(chat_messages) > 1 else None
-        logger.info(f"User text in tts : {user_text[:30]}...")
-        logger.info(f"GM Text  : {text[:30]}...")
+        logger.info(f"User text in tts : {user_text[:15] if user_text and len(user_text) >= 15 else user_text}...")
+        logger.info(f"GM Text  : {text[:15] if text and len(text) >= 15 else text}...")
         
         asyncio.create_task( save_next_turn_api(user_text, text, str(game_data.game.id)) )
         #api_queue.put_nowait((text, "host", user_text))
