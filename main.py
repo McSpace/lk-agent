@@ -109,7 +109,7 @@ async def handle_imagegen_api(gm_text, last_turn_id, ctx, game_data):
 
         participant = await ctx.wait_for_participant()
         if image_url:
-            proc.userdata["pic_url"] = image_url
+            ctx.proc.userdata["pic_url"] = image_url
             logger.info(f"====== SET PIC URL: {image_url} ===== ") 
             try:
                 await ctx.room.local_participant.publish_data(image_url,
