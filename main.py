@@ -88,7 +88,7 @@ async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
     async with aiohttp.ClientSession() as session:
         payload = {
             "pic_id": turn_id,
-            "messages": messages,
+            "chat_history": messages,
             "illustration_style": game_data.image_style_prompt, #"A medieval book illustration, without borders or frames. The illustration style mirrors that of illuminated manuscripts, with vibrant colors, intricate details, and a slightly flattened perspective that allows for a comprehensive view of the scene. Touches of gold leaf accentuate important elements, adding a magical quality to the scene. The image extends to the edges, fully immersing the viewer in the setting.",
             "main_character":  game_data.character_appearance # "Our hero is a young man in his late twenties or early thirties with a strong build, short dark hair, and a clean-shaven face. He wears a striking red cloak over practical leather armor. His youthful yet experienced face suggests a mix of enthusiasm and earned wisdom."
         }
@@ -157,7 +157,7 @@ async def entrypoint(ctx: JobContext):
         
         # if len(chat_messages) > 2:
         # Запускаем обработку API в фоновом режиме
-        asyncio.create_task(handle_imagegen_api([text], "", ctx, game_data))
+        asyncio.create_task(handle_imagegen_api(text, "", ctx, game_data))
         
         return text
 
