@@ -85,7 +85,6 @@ async def save_next_turn_api(user_text: str, gm_text: str, game_id: str, image_u
             response_json = await response.json()
             logger.info(f"API Response: {response_json}")
             return 
-
 async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
     async with aiohttp.ClientSession() as session:
         payload = {
@@ -277,7 +276,7 @@ async def entrypoint(ctx: JobContext):
 
     async def on_session_end():
         logger.info("====== on_session_end. time to generate Preview =====")
-        if len(assistant.chat_ctx.messages) > 2
+        if len(assistant.chat_ctx.messages) > 2:
             async with aiohttp.ClientSession() as session:
                 payload = {} 
                 logger.info("====== save_next_turn_api inside=====")
