@@ -264,45 +264,16 @@ async def entrypoint(ctx: JobContext):
         chat_messages.append({"role": "player", "content": msg.content})
         logger.info(f"Added player message to chat. Total messages: {len(chat_messages)}")
 
-    # async def send_to_api_worker():
-    #     # nonlocal last_turn_id
-    #     logger.info(f"====== send_to_api_worker knows game_id {game_id} and last_turn_id {last_turn_id} =====")
-    #     while True:
-    #         content, message_role, user_text = await api_queue.get()
-    #         logger.info(f"====== from api_queue {message_role}: {content}")
-    #         if isinstance(content, str):
-    #             try:
-    #                 logger.info(f"====== send_to_api {message_role}: {content}")
-    #                 turn_id = await send_to_api(content, message_role,  game_id, last_turn_id, user_text)
-    #                 if turn_id:
-    #                     last_turn_id = turn_id  # Сохраняем id хода
-    #                     logger.info(f"Saved turn_id: {last_turn_id}")
-    #             except Exception as e:
-    #                 logger.error(f"Error sending data to API: {e}")
-    #             finally:
-    #                 api_queue.task_done()
-
-    # api_task = asyncio.create_task(send_to_api_worker())
-
-    # async def finish_queue():
-    #     logger.info("====== finish_queue =====")
-    #     # await api_queue.join()
-    #     # try:
-    #     #     await api_task
-    #     # except asyncio.CancelledError:
-    #     #     pass
-
     async def on_session_end():
         logger.info("====== on_session_end. time to generate Preview =====")
         
 
-    # ctx.add_shutdown_callback(finish_queue)      
     ctx.add_shutdown_callback(on_session_end)  
 
     await asyncio.sleep(1)
 
     # Greets the user with an initial message
-    await assistant.say(game_data.latest_summary if game_data.latest_summary else "Начнём?", allow_interruptions=False)
+    await assistant.say(game_data.latest_summary.summary_text if game_data.latest_summary else "Начнём?", allow_interruptions=False)
 
 
 if __name__ == "__main__":
