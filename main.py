@@ -70,12 +70,14 @@ async def get_game_data(game_id: str) -> Optional[GameData]:
 def prewarm(proc: JobProcess):
     proc.userdata["vad"] = silero.VAD.load()
 
-async def save_next_turn_api(user_text: str, gm_text: str, game_id: str):
+async def save_next_turn_api(user_text: str, gm_text: str, game_id: str, image_url: str, pic_prompt: str):
     async with aiohttp.ClientSession() as session:
         payload = {
             "game_id": game_id,
             "player_text": user_text,
-            "gm_response": gm_text
+            "gm_response": gm_text,
+            "image_url": image_url,
+            "pic_prompt": pic_prompt
         } 
         logger.info("====== save_next_turn_api inside=====")
         logger.info(f"Sending payload to story API: {payload}")
@@ -100,16 +102,19 @@ async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
                                 ) as response:
             result = await response.json()
             logger.info(f"Received response from story API: {result}")
-            return result.get('image_url')
+            return result
 
 async def handle_imagegen_api(gm_text, last_turn_id, ctx, game_data):
     try:
-        image_url = await send_to_imageGen_api(gm_text, last_turn_id, game_data)
+        generator_result = await send_to_imageGen_api(gm_text, last_turn_id, game_data)
+        image_url = generator_result.get('image_url') if generator_result else None
+        image_prompt = generator_result.get('illustration_prompt') if generator_result else None
         logger.info(f"Story API called successfully. Image URL: {image_url}")
 
         participant = await ctx.wait_for_participant()
         if image_url:
             ctx.proc.userdata["pic_url"] = image_url
+            ctx.proc.userdata["pic_prompt"] = image_prompt
             logger.info(f"====== SET PIC URL: {image_url} ===== ") 
             try:
                 await ctx.room.local_participant.publish_data(image_url,
@@ -247,13 +252,14 @@ async def entrypoint(ctx: JobContext):
         print_chat_messages(assistant.chat_ctx.messages)
 
         pic_url = ctx.proc.userdata.get("pic_url")
+        pic_prompt = ctx.proc.userdata.get("pic_prompt")
         logger.info(f"====== CHECK PIC URL: {pic_url} ===== ") 
         
         # Send turn to API
         if len(assistant.chat_ctx.messages) > 2:
             user_text = assistant.chat_ctx.messages[-2].content
             gm_text = assistant.chat_ctx.messages[-1].content
-            asyncio.create_task( save_next_turn_api(user_text, gm_text, str(game_data.game.id)) )
+            asyncio.create_task( save_next_turn_api(user_text, gm_text, str(game_data.game.id), pic_url, pic_prompt) )
 
 
 
@@ -271,6 +277,14 @@ async def entrypoint(ctx: JobContext):
 
     async def on_session_end():
         logger.info("====== on_session_end. time to generate Preview =====")
+        async with aiohttp.ClientSession() as session:
+            payload = {} 
+            logger.info("====== save_next_turn_api inside=====")
+            logger.info(f"Sending payload to story API: {payload}")
+            async with session.post(f"{os.getenv('STORY_API_URL')}/summary/{game_id}/generate", json=payload) as response:
+                response_json = await response.json()
+                logger.info(f"summary generate API Response: {response_json}")
+                return 
         
 
     ctx.add_shutdown_callback(on_session_end)  
