@@ -38,12 +38,17 @@ class Game(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+class GameSummary(BaseModel):
+    id: UUID
+    turn_number: int
+    summary_text: str
+
 class GameData(BaseModel):
     world_description: str
     character_description: str
     character_appearance: Optional[str]
     image_style_prompt: Optional[str]
-    latest_summary: Optional[str]
+    latest_summary: Optional[GameSummary]
     game: Game
     user_lang: str
 
