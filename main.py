@@ -155,9 +155,9 @@ async def entrypoint(ctx: JobContext):
             
         })
         
-        if len(chat_messages) > 2:
-            # Запускаем обработку API в фоновом режиме
-            asyncio.create_task(handle_imagegen_api([text], "", ctx, game_data))
+        # if len(chat_messages) > 2:
+        # Запускаем обработку API в фоновом режиме
+        asyncio.create_task(handle_imagegen_api([text], "", ctx, game_data))
         
         return text
 
@@ -188,7 +188,7 @@ async def entrypoint(ctx: JobContext):
             {game_data.character_description}
 
             
-            {f"Текущее состояние игры: {game_data.latest_summary}"  if game_data.latest_summary else ""}
+            {f"Текущее состояние игры: {game_data.latest_summary.summary_text}"  if game_data.latest_summary else ""}
             """
         )
     else:
@@ -245,10 +245,10 @@ async def entrypoint(ctx: JobContext):
         print_chat_messages(assistant.chat_ctx.messages)
         
         # Send turn to API
-        # if len(assistant.chat_ctx.messages) > 1:
-        user_text = assistant.chat_ctx.messages[-2].content
-        gm_text = assistant.chat_ctx.messages[-1].content
-        asyncio.create_task( save_next_turn_api(user_text, gm_text, str(game_data.game.id)) )
+        if len(assistant.chat_ctx.messages) > 2:
+            user_text = assistant.chat_ctx.messages[-2].content
+            gm_text = assistant.chat_ctx.messages[-1].content
+            asyncio.create_task( save_next_turn_api(user_text, gm_text, str(game_data.game.id)) )
 
 
 
@@ -273,7 +273,7 @@ async def entrypoint(ctx: JobContext):
     await asyncio.sleep(1)
 
     # Greets the user with an initial message
-    await assistant.say(game_data.latest_summary.summary_text if game_data.latest_summary else "Начнём?", allow_interruptions=False)
+    await assistant.say(game_data.latest_summary.summary_text if game_data.latest_summary else "Начнём?", allow_interruptions=True)
 
 
 if __name__ == "__main__":
