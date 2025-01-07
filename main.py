@@ -245,10 +245,10 @@ async def entrypoint(ctx: JobContext):
         print_chat_messages(assistant.chat_ctx.messages)
         
         # Send turn to API
-        if len(assistant.chat_ctx.messages) > 2:
-            user_text = assistant.chat_ctx.messages[-2].content
-            gm_text = assistant.chat_ctx.messages[-1].content
-            asyncio.create_task( save_next_turn_api(user_text, gm_text, str(game_data.game.id)) )
+        # if len(assistant.chat_ctx.messages) > 1:
+        user_text = assistant.chat_ctx.messages[-2].content
+        gm_text = assistant.chat_ctx.messages[-1].content
+        asyncio.create_task( save_next_turn_api(user_text, gm_text, str(game_data.game.id)) )
 
 
 
