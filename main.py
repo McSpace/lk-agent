@@ -109,6 +109,8 @@ async def handle_imagegen_api(gm_text, last_turn_id, ctx, game_data):
 
         participant = await ctx.wait_for_participant()
         if image_url:
+            proc.userdata["pic_url"] = image_url
+            logger.info(f"====== SET PIC URL: {image_url} ===== ") 
             try:
                 await ctx.room.local_participant.publish_data(image_url,
                                 reliable=True,
@@ -243,6 +245,8 @@ async def entrypoint(ctx: JobContext):
 
         logger.info("====== on_agent_speech_committed =====")
         print_chat_messages(assistant.chat_ctx.messages)
+
+        logger.info(f"====== CHECK PIC URL: {ctx.proc.userdata["pic_url"]} ===== ") 
         
         # Send turn to API
         if len(assistant.chat_ctx.messages) > 2:
