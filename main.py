@@ -277,14 +277,17 @@ async def entrypoint(ctx: JobContext):
 
     async def on_session_end():
         logger.info("====== on_session_end. time to generate Preview =====")
-        async with aiohttp.ClientSession() as session:
-            payload = {} 
-            logger.info("====== save_next_turn_api inside=====")
-            logger.info(f"Sending payload to story API: {payload}")
-            async with session.post(f"{os.getenv('STORY_API_URL')}/summary/{game_id}/generate", json=payload) as response:
-                response_json = await response.json()
-                logger.info(f"summary generate API Response: {response_json}")
-                return 
+        if len(assistant.chat_ctx.messages) > 2
+            async with aiohttp.ClientSession() as session:
+                payload = {} 
+                logger.info("====== save_next_turn_api inside=====")
+                logger.info(f"Sending payload to story API: {payload}")
+                async with session.post(f"{os.getenv('STORY_API_URL')}/summary/{game_id}/generate", json=payload) as response:
+                    response_json = await response.json()
+                    logger.info(f"summary generate API Response: {response_json}")
+                    return 
+        else:
+            logger.info("====== Not enough messages to generate summary =====")
         
 
     ctx.add_shutdown_callback(on_session_end)  
