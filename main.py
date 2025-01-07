@@ -336,7 +336,7 @@ async def entrypoint(ctx: JobContext):
     await asyncio.sleep(1)
 
     # Greets the user with an initial message
-    await assistant.say("Начнём?", allow_interruptions=False)
+    await assistant.say(game_data.latest_summary if game_data.latest_summary else "Начнём?", allow_interruptions=False)
 
 
 if __name__ == "__main__":
