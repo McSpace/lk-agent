@@ -69,32 +69,6 @@ async def get_game_data(game_id: str) -> Optional[GameData]:
 
 def prewarm(proc: JobProcess):
     proc.userdata["vad"] = silero.VAD.load()
-    #proc.userdata["product"] = "New mobile phone iPhone 21. 999$, mind control"
-    #logger.info("Set Product")
-
-async def send_to_api(content: str, message_role: str, game_id: str, turn_id: str | None = None, user_text: str | None = None):
-    async with aiohttp.ClientSession() as session:
-        logger.info(f"====== send_to_api inside {message_role} =====")
-        if message_role == "host":
-            payload = {
-                "game_id": game_id,
-                "player_text": user_text,
-                "gm_response": content
-            }        
-            async with session.post(f"{os.getenv('STORY_API_URL')}/turns", json=payload) as response:
-                response_json = await response.json()
-                logger.info(f"API Response: {response_json}")
-                return response_json.get('id')  # Возвращаем id из ответа
-        # elif turn_id:
-        #     logger.info(f"====== send_to_api not user - {message_role}: {content}")
-        #     payload = {
-        #         "gm_response": content
-        #     }        
-        #     async with session.put(f"{os.getenv('STORY_API_URL')}/turns/{turn_id}", json=payload) as response:
-        #         response_json = await response.json()
-        #         logger.info(f"API Response: {response_json}")
-        #         return turn_id
-
 
 async def save_next_turn_api(user_text: str, gm_text: str, game_id: str):
     async with aiohttp.ClientSession() as session:
@@ -128,9 +102,9 @@ async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
             logger.info(f"Received response from story API: {result}")
             return result.get('image_url')
 
-async def handle_imagegen_api(chat_messages, last_turn_id, ctx, game_data):
+async def handle_imagegen_api(gm_text, last_turn_id, ctx, game_data):
     try:
-        image_url = await send_to_imageGen_api(chat_messages[-1:], last_turn_id, game_data)
+        image_url = await send_to_imageGen_api(gm_text, last_turn_id, game_data)
         logger.info(f"Story API called successfully. Image URL: {image_url}")
 
         participant = await ctx.wait_for_participant()
@@ -167,11 +141,8 @@ async def entrypoint(ctx: JobContext):
         logger.info(current_user_text)
 
     async def before_tts(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
-        # if (len(chat_messages)) > 0:
-            # nonlocal last_turn_id
         logger.info("====== before_tts =====")
         logger.info(f"chat_messages: {len(assistant.chat_ctx.messages)}")
-        # print_chat_messages(assistant.chat_ctx.messages)
 
         # Ensure text is a string before adding to chat messages
         if isinstance(text, AsyncIterable):
@@ -183,20 +154,10 @@ async def entrypoint(ctx: JobContext):
             "content": text,
             
         })
-    
-        # user_text = current_user_text #chat_messages[-1]["content"] if len(chat_messages) > 1 else None
-        # logger.info(f"User text in tts : {user_text[:15] if user_text and len(user_text) >= 15 else user_text}...")
-        # logger.info(f"GM Text  : {text[:15] if text and len(text) >= 15 else text}...")
         
-        # asyncio.create_task( save_next_turn_api(user_text, text, str(game_data.game.id)) )
-        # #api_queue.put_nowait((text, "host", user_text))
-
-        # logger.info(f"Added agent message to chat. Total messages: {len(chat_messages)}")
-        
-        #Если накоплено более 1 сообщений, вызываем новый API
-        
-        # Запускаем обработку API в фоновом режиме
-        asyncio.create_task(handle_imagegen_api(chat_messages, "", ctx, game_data))
+        if len(chat_messages) > 2:
+            # Запускаем обработку API в фоновом режиме
+            asyncio.create_task(handle_imagegen_api([text], "", ctx, game_data))
         
         return text
 
