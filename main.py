@@ -246,7 +246,8 @@ async def entrypoint(ctx: JobContext):
         logger.info("====== on_agent_speech_committed =====")
         print_chat_messages(assistant.chat_ctx.messages)
 
-        logger.info(f"====== CHECK PIC URL: {ctx.proc.userdata["pic_url"]} ===== ") 
+        pic_url = ctx.proc.userdata.get("pic_url")
+        logger.info(f"====== CHECK PIC URL: {pic_url} ===== ") 
         
         # Send turn to API
         if len(assistant.chat_ctx.messages) > 2:
