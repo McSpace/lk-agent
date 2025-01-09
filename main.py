@@ -147,14 +147,19 @@ async def entrypoint(ctx: JobContext):
             if str(chat_context).lower()== "отмена":
                 logger.info("User cancelled the game")
                 return False
-                
+
         current_user_text = chat_context.messages[-1].content if len(chat_context.messages) > 0 else None
         logger.info(current_user_text)
 
     async def before_tts(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
         logger.info("====== before_tts =====")
         # logger.info(f"chat_messages: {len(assistant.chat_ctx.messages)}")
-        logger.info(f"len text: {len(text)}, text: {text}")
+        logger.info(f"len text: { text: {text}")
+        if isinstance(text, AsyncIterable):
+             logger.info(f"AsyncIterable")
+             #text = ''.join([chunk async for chunk in text])
+        else:
+            logger.info(f"not AsyncIterable. {text}")     
 
         # # Ensure text is a string before adding to chat messages
         # if isinstance(text, AsyncIterable):
