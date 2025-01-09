@@ -142,7 +142,7 @@ async def entrypoint(ctx: JobContext):
     lkapi = livekit.api.LiveKitAPI()
 
     async def before_llm(assistant: VoicePipelineAgent, chat_context: str | AsyncIterable[str]):
-        logger.info(f"====== before_LLM ==={chat_context}==")
+        logger.info(f"====== before_LLM =====")
         # if isinstance(chat_context, str):
         #     if str(chat_context).lower() == "хорошо":
         #         logger.info("User cancelled chat")
@@ -162,7 +162,6 @@ async def entrypoint(ctx: JobContext):
         else:
             logger.info("User did not cancel chat")
 
-        logger.info(current_user_text)
 
     async def before_tts(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
         logger.info("====== before_tts =====")
