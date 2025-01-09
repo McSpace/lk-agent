@@ -148,7 +148,7 @@ async def entrypoint(ctx: JobContext):
         logger.info(current_user_text)
         if current_user_text.lower()[:6] == "хорошо":
             logger.info("User cancelled chat")
-            del chat_context.messages[-1]
+            chat_context.messages.content = ""
             logger.info(f"new last message is {chat_context.messages[-1].content}")
             return False
         else:
