@@ -144,12 +144,12 @@ async def entrypoint(ctx: JobContext):
     async def before_llm(assistant: VoicePipelineAgent, chat_context: str | AsyncIterable[str]):
         logger.info(f"====== before_LLM =====")
 
-        current_user_text = assistant.chat_ctx.messages[-1].content if len(assistant.chat_ctx.messages) > 0 else None
+        current_user_text = chat_context.messages[-1].content if len(chat_context.messages) > 0 else None
         logger.info(current_user_text)
         if current_user_text.lower()[:6] == "хорошо":
             logger.info("User cancelled chat")
-            assistant.chat_ctx.messages[-1].content = ""
-            logger.info(f"new last message is {assistant.chat_ctx.messages[-1].content}")
+            chat_context.messages = []
+            logger.info(f"new last message is {assistant.chat_ctx.messages}")
             return False
         else:
             logger.info("User did not cancel chat")
