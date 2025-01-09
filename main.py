@@ -146,7 +146,7 @@ async def entrypoint(ctx: JobContext):
         logger.info(f"====== before_LLM =====")
 
         current_user_text = chat_context.messages[-1].content if len(chat_context.messages) > 0 else None
-        prev_user_text = ctx.proc.userdata["prev_user_text"]
+        prev_user_text = ctx.proc.userdata.get("prev_user_text")
         if prev_user_text and current_user_text.startswith(prev_user_text):
             logger.info("Removing previous user text from current user text")
             current_user_text = current_user_text[len(prev_user_text):]  
