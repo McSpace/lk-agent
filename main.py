@@ -144,12 +144,12 @@ async def entrypoint(ctx: JobContext):
     async def before_llm(assistant: VoicePipelineAgent, chat_context: str | AsyncIterable[str]):
         logger.info(f"====== before_LLM =====")
 
-        current_user_text = chat_context.messages[-1].content if len(chat_context.messages) > 0 else None
+        current_user_text = assistant.chat_ctx.messages[-1].content if len(assistant.chat_ctx.messages) > 0 else None
         logger.info(current_user_text)
         if current_user_text.lower()[:6] == "хорошо":
             logger.info("User cancelled chat")
-            chat_context.messages[-1].content = ""
-            logger.info(f"new last message is {chat_context.messages[-1].content}")
+            assistant.chat_ctx.messages[-1].content = ""
+            logger.info(f"new last message is {assistant.chat_ctx.messages[-1].content}")
             return False
         else:
             logger.info("User did not cancel chat")
@@ -281,6 +281,7 @@ async def entrypoint(ctx: JobContext):
     @assistant.on("user_speech_committed")
     def on_user_speech_committed(msg: llm.ChatMessage):
         logger.info("====== user_speech_committed ===")
+        logger.info(f"User message: {msg.content}")
         # Добавляем данные в очередь для отправки на API
         # text = api_queue.put_nowait((msg.content, "user"))
         # logger.info(text)
@@ -309,7 +310,7 @@ async def entrypoint(ctx: JobContext):
     await asyncio.sleep(1)
 
     # Greets the user with an initial message
-    await assistant.say(game_data.latest_summary.summary_text if game_data.latest_summary else "Начнём?", allow_interruptions=True)
+    #await assistant.say(game_data.latest_summary.summary_text if game_data.latest_summary else "Начнём?", allow_interruptions=True)
 
 
 if __name__ == "__main__":
