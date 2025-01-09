@@ -149,6 +149,7 @@ async def entrypoint(ctx: JobContext):
     async def before_tts(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
         logger.info("====== before_tts =====")
         # logger.info(f"chat_messages: {len(assistant.chat_ctx.messages)}")
+        logger.info(f"len text: {len(text)}, text: {text}")
 
         # # Ensure text is a string before adding to chat messages
         # if isinstance(text, AsyncIterable):
