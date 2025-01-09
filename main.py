@@ -143,16 +143,6 @@ async def entrypoint(ctx: JobContext):
 
     async def before_llm(assistant: VoicePipelineAgent, chat_context: str | AsyncIterable[str]):
         logger.info(f"====== before_LLM =====")
-        # if isinstance(chat_context, str):
-        #     if str(chat_context).lower() == "хорошо":
-        #         logger.info("User cancelled chat")
-        #         return False
-        #     else:
-        #         logger.info("User did not cancel chat")
-        #         return chat_context
-        # else:
-        #     logger.info("chat_context is not a string")
-            
 
         current_user_text = chat_context.messages[-1].content if len(chat_context.messages) > 0 else None
         logger.info(current_user_text)
