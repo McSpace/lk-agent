@@ -149,19 +149,22 @@ async def entrypoint(ctx: JobContext):
         prev_user_text = ctx.proc.userdata.get("prev_user_text")
         if prev_user_text and current_user_text.startswith(prev_user_text):
             logger.info("Removing previous user text from current user text")
-            ctx.proc.userdata["prev_user_text"] = current_user_text[len(prev_user_text):]  
+            current_user_text = current_user_text[len(prev_user_text):]  
+            # ctx.proc.userdata["prev_user_text"] = current_user_text
         
         logger.info(current_user_text)
-        if not current_user_text.lstrip().lower().startswith("эй"):
-            logger.info("User cancelled chat")
+        if current_user_text.lstrip().lower().startswith("эй"):
+            logger.info("Start working")
 
+            ctx.proc.userdata["prev_user_text"] = None
+
+
+        else:
+            logger.info("No key - cancel chat")
             ctx.proc.userdata["prev_user_text"] = current_user_text
 
             # logger.info(f"new last message is {chat_context.messages}")
-            return False
-        else:
-            ctx.proc.userdata["prev_user_text"] = None
-            logger.info("User did not cancel chat")
+            return False            
 
 
     async def before_tts(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
