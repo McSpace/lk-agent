@@ -158,12 +158,13 @@ async def entrypoint(ctx: JobContext):
             logger.info("Start working")
 
             ctx.proc.userdata["prev_user_text"] = None
+            logger.info(f"save prev_user_text: {ctx.proc.userdata["prev_user_text"]}")
 
 
         else:
             logger.info("No key - cancel chat")
-            ctx.proc.userdata["prev_user_text"] = current_user_text
-            logger.info(f"save prev_user_text: {prev_user_text}")
+            ctx.proc.userdata["prev_user_text"] = current_user_text if ctx.proc.userdata["prev_user_text"] is None else ctx.proc.userdata["prev_user_text"] + current_user_text
+            logger.info(f"save prev_user_text: {ctx.proc.userdata["prev_user_text"]}")
 
             # logger.info(f"new last message is {chat_context.messages}")
             return False            
