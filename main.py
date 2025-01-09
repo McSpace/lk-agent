@@ -154,7 +154,7 @@ async def entrypoint(ctx: JobContext):
     async def before_tts(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
         logger.info("====== before_tts =====")
         # logger.info(f"chat_messages: {len(assistant.chat_ctx.messages)}")
-        logger.info(f"len text: { text: {text}")
+        logger.info(f"len text: text: {text}")
         if isinstance(text, AsyncIterable):
              logger.info(f"AsyncIterable")
              #text = ''.join([chunk async for chunk in text])
