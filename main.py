@@ -139,17 +139,24 @@ async def entrypoint(ctx: JobContext):
 
     chat_messages = []
     current_user_text = None
+    prev_user_text = None
     lkapi = livekit.api.LiveKitAPI()
 
     async def before_llm(assistant: VoicePipelineAgent, chat_context: str | AsyncIterable[str]):
         logger.info(f"====== before_LLM =====")
 
         current_user_text = chat_context.messages[-1].content if len(chat_context.messages) > 0 else None
+        if current_user_text.startswith(prev_user_text):
+            logger.info("Removing previous user text from current user text")
+            current_user_text = current_user_text[len(prev_user_text):]  
+        
         logger.info(current_user_text)
         if current_user_text.lower()[:6] == "хорошо":
             logger.info("User cancelled chat")
-            chat_context.messages = []
-            logger.info(f"new last message is {assistant.chat_ctx.messages}")
+
+            prev_user_text = current_user_text
+
+            logger.info(f"new last message is {chat_context.messages}")
             return False
         else:
             logger.info("User did not cancel chat")
