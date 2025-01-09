@@ -152,7 +152,7 @@ async def entrypoint(ctx: JobContext):
             current_user_text = current_user_text[len(prev_user_text):]  
         
         logger.info(current_user_text)
-        if current_user_text.lower()[:6] == "хорошо":
+        if not current_user_text.lower().startswith("эй"):
             logger.info("User cancelled chat")
 
             ctx.proc.userdata["prev_user_text"] = current_user_text
