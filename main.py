@@ -148,22 +148,22 @@ async def entrypoint(ctx: JobContext):
 
     async def before_tts(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
         logger.info("====== before_tts =====")
-        logger.info(f"chat_messages: {len(assistant.chat_ctx.messages)}")
+        # logger.info(f"chat_messages: {len(assistant.chat_ctx.messages)}")
 
-        # Ensure text is a string before adding to chat messages
-        if isinstance(text, AsyncIterable):
-            logger.info(f"AsyncIterable")
-            text = ''.join([chunk async for chunk in text])
+        # # Ensure text is a string before adding to chat messages
+        # if isinstance(text, AsyncIterable):
+        #     logger.info(f"AsyncIterable")
+        #     text = ''.join([chunk async for chunk in text])
         
-        chat_messages.append({
-            "role": "host", 
-            "content": text,
+        # chat_messages.append({
+        #     "role": "host", 
+        #     "content": text,
             
-        })
+        # })
         
-        # if len(chat_messages) > 2:
-        # Запускаем обработку API в фоновом режиме
-        asyncio.create_task(handle_imagegen_api(text, "", ctx, game_data))
+        # # if len(chat_messages) > 2:
+        # # Запускаем обработку API в фоновом режиме
+        # asyncio.create_task(handle_imagegen_api(text, "", ctx, game_data))
         
         return text
 
