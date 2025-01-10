@@ -106,6 +106,7 @@ async def entrypoint(ctx: JobContext):
         role="system",
         text = """
         Ты корпоративный помощник. Твоя задача помогать сотрудникам в их паботе. Отвечать на запросы и выполнять поручения.
+        Отвечай только на Английском языке.
         """
     )
     voice = elevenlabs.Voice(
@@ -123,7 +124,8 @@ async def entrypoint(ctx: JobContext):
         ),
         # tts=openai.TTS(),
         tts = elevenlabs.TTS(
-            model_id="eleven_multilingual_v2",
+            # model_id="eleven_multilingual_v2",
+            model_id="eleven_flash_v2_5",
             voice=voice,
             api_key=os.getenv("ELEVENLABS_API_KEY"),
         ),
