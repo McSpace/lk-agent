@@ -116,7 +116,7 @@ async def entrypoint(ctx: JobContext):
     assistant = VoiceAssistant(
         vad=ctx.proc.userdata["vad"],
         stt=deepgram.STT(
-            language=game_data.user_lang
+            language="ru"
         ),
         llm=openai.LLM(
             model="gpt-4o-mini",
@@ -126,7 +126,6 @@ async def entrypoint(ctx: JobContext):
             model_id="eleven_multilingual_v2",
             voice=voice,
             api_key=os.getenv("ELEVENLABS_API_KEY"),
-            # language=game_data.user_lang
         ),
         chat_ctx=initial_ctx,
         before_llm_cb=before_llm,
@@ -167,7 +166,7 @@ async def entrypoint(ctx: JobContext):
     await asyncio.sleep(1)
 
     # Greets the user with an initial message
-    #await assistant.say(game_data.latest_summary.summary_text if game_data.latest_summary else "Начнём?", allow_interruptions=True)
+    #await assistant.say("Привет! Я корпоративный помощник. Чем могу помочь?")
 
 
 if __name__ == "__main__":
