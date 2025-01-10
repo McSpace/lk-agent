@@ -11,7 +11,8 @@ import dotenv
 from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, JobProcess, cli, llm
 from livekit.agents.pipeline import VoicePipelineAgent
 from livekit.agents.voice_assistant import VoiceAssistant
-from livekit.plugins import deepgram, openai, silero , elevenlabs
+from livekit.plugins import deepgram, openai, silero , elevenlabs, cartesia
+
 from dotenv import load_dotenv
 import livekit.api
 from livekit.api import UpdateParticipantRequest
@@ -61,9 +62,6 @@ async def entrypoint(ctx: JobContext):
             ctx.proc.userdata["prev_user_text"] = None
             logger.info(f"save prev_user_text: None")
 
-            assistant.tts = openai.TTS()
-            logger.info("Change TTS to openai.TTS")
-
 
         else:
             logger.info("No key - cancel chat")
@@ -109,8 +107,8 @@ async def entrypoint(ctx: JobContext):
         role="system",
         text = """
         Ты корпоративный помощник. Твоя задача помогать сотрудникам в их паботе. Отвечать на запросы и выполнять поручения.
-        Отвечай только на Английском языке.
         """
+        # + " Отвечай только на Английском языке.""
     )
     # voice = elevenlabs.Voice(
     #             id=os.getenv("ELEVENLABS_VOICE_ID"),
@@ -118,17 +116,21 @@ async def entrypoint(ctx: JobContext):
     #             category="standard",
     #             )
 
-    tts = elevenlabs.TTS(
-            # model_id="eleven_multilingual_v2",
-            model_id="eleven_flash_v2_5",
-            voice = elevenlabs.Voice(
-                id=os.getenv("ELEVENLABS_VOICE_ID"),
-                name="Alice",
-                category="standard",
-                ),
-            api_key=os.getenv("ELEVENLABS_API_KEY"),
-        )
-
+    # tts = elevenlabs.TTS(
+    #         # model_id="eleven_multilingual_v2",
+    #         model_id="eleven_flash_v2_5",
+    #         voice = elevenlabs.Voice(
+    #             id=os.getenv("ELEVENLABS_VOICE_ID"),
+    #             name="Alice",
+    #             category="standard",
+    #             ),
+    #         api_key=os.getenv("ELEVENLABS_API_KEY"),
+    #     )
+    tts = cartesia.TTS(
+        speed = 0.5,
+        voice = "da05e96d-ca10-4220-9042-d8acef654fa9"
+    )
+    
     assistant = VoiceAssistant(
         vad=ctx.proc.userdata["vad"],
         stt=deepgram.STT(
@@ -179,7 +181,7 @@ async def entrypoint(ctx: JobContext):
     await asyncio.sleep(1)
 
     # Greets the user with an initial message
-    #await assistant.say("Привет! Я корпоративный помощник. Чем могу помочь?")
+    await assistant.say("Привет! Я корпоративный помощник, Бустер. Я отвечаю когда вы обратитесь ко мне по имени.")
 
 
 if __name__ == "__main__":
