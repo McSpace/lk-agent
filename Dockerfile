@@ -46,5 +46,5 @@ RUN python main.py download-files
 
 # Run the application.
 #ENTRYPOINT ["python", "main.py"]
-ENTRYPOINT ["python", "company_adent.py"]
+ENTRYPOINT ["python", "company_agent.py"]
 CMD ["start"]

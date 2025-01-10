@@ -55,7 +55,7 @@ async def entrypoint(ctx: JobContext):
             # ctx.proc.userdata["prev_user_text"] = current_user_text
         
         logger.info(current_user_text)
-        if current_user_text.lstrip().lower().startswith("эй"):
+        if current_user_text.lstrip().lower().startswith("бустер"):
             logger.info("Start working")
 
             ctx.proc.userdata["prev_user_text"] = None
