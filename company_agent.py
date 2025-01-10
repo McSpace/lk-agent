@@ -61,6 +61,9 @@ async def entrypoint(ctx: JobContext):
             ctx.proc.userdata["prev_user_text"] = None
             logger.info(f"save prev_user_text: None")
 
+            assistant.tts = openai.TTS()
+            logger.info("Change TTS to openai.TTS")
+
 
         else:
             logger.info("No key - cancel chat")
@@ -114,6 +117,13 @@ async def entrypoint(ctx: JobContext):
                 name="Alice",
                 category="standard",
                 )
+    tts = elevenlabs.TTS(
+            # model_id="eleven_multilingual_v2",
+            model_id="eleven_flash_v2_5",
+            voice=voice,
+            api_key=os.getenv("ELEVENLABS_API_KEY"),
+        ),
+
     assistant = VoiceAssistant(
         vad=ctx.proc.userdata["vad"],
         stt=deepgram.STT(
@@ -123,11 +133,7 @@ async def entrypoint(ctx: JobContext):
             model="gpt-4o-mini",
         ),
         # tts=openai.TTS(),
-        tts = elevenlabs.TTS(
-            # model_id="eleven_multilingual_v2",
-            model_id="eleven_flash_v2_5",
-            voice=voice,
-            api_key=os.getenv("ELEVENLABS_API_KEY"),
+        tts = tts,
         ),
         chat_ctx=initial_ctx,
         before_llm_cb=before_llm,
