@@ -78,15 +78,18 @@ async def entrypoint(ctx: JobContext):
 
         full_text = []
         
-        async def accumulate_and_yield():
-            async for chunk in text:
-                full_text.append(chunk)
-                # logger.info(f"chunk: {chunk}")
-                yield chunk
-            
-            # После завершения всех чанков, можно залогировать полный текст
-            logger.info(f"full text: {''.join(full_text)}")
-        return accumulate_and_yield()
+        if isinstance(text, AsyncIterable):
+            async def accumulate_and_yield():
+                async for chunk in text:
+                    full_text.append(chunk)
+                    # logger.info(f"chunk: {chunk}")
+                    yield chunk
+                
+                # После завершения всех чанков, можно залогировать полный текст
+                logger.info(f"full text: {''.join(full_text)}")
+            return accumulate_and_yield()
+        else:
+            return text
 
 
         # logger.info(f"len text: text: {text}")
@@ -130,7 +133,7 @@ async def entrypoint(ctx: JobContext):
         speed = 0.5,
         voice = "da05e96d-ca10-4220-9042-d8acef654fa9"
     )
-    
+
     assistant = VoiceAssistant(
         vad=ctx.proc.userdata["vad"],
         stt=deepgram.STT(
