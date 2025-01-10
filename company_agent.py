@@ -97,7 +97,7 @@ async def entrypoint(ctx: JobContext):
         #      logger.info(f"AsyncIterable")
         #      #text = ''.join([chunk async for chunk in text])
         # else:
-        #     logger.info(f"not AsyncIterable. {text}")     
+        #     logger.info(f"not . {text}")     
         
         # return text
 
