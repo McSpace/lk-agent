@@ -112,17 +112,22 @@ async def entrypoint(ctx: JobContext):
         Отвечай только на Английском языке.
         """
     )
-    voice = elevenlabs.Voice(
-                id=os.getenv("ELEVENLABS_VOICE_ID"),
-                name="Alice",
-                category="standard",
-                )
+    # voice = elevenlabs.Voice(
+    #             id=os.getenv("ELEVENLABS_VOICE_ID"),
+    #             name="Alice",
+    #             category="standard",
+    #             )
+
     tts = elevenlabs.TTS(
             # model_id="eleven_multilingual_v2",
             model_id="eleven_flash_v2_5",
-            voice=voice,
+            voice = elevenlabs.Voice(
+                id=os.getenv("ELEVENLABS_VOICE_ID"),
+                name="Alice",
+                category="standard",
+                ),
             api_key=os.getenv("ELEVENLABS_API_KEY"),
-        ),
+        )
 
     assistant = VoiceAssistant(
         vad=ctx.proc.userdata["vad"],
@@ -134,7 +139,7 @@ async def entrypoint(ctx: JobContext):
         ),
         # tts=openai.TTS(),
         tts = tts,
-        ),
+    
         chat_ctx=initial_ctx,
         before_llm_cb=before_llm,
         before_tts_cb=before_tts,
