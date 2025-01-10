@@ -80,7 +80,7 @@ async def entrypoint(ctx: JobContext):
         async def accumulate_and_yield():
             async for chunk in text:
                 full_text.append(chunk)
-                logger.info(f"chunk: {chunk}")
+                # logger.info(f"chunk: {chunk}")
                 yield chunk
             
             # После завершения всех чанков, можно залогировать полный текст
