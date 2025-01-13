@@ -236,7 +236,7 @@ async def entrypoint(ctx: JobContext):
     tts = cartesia.TTS(
         speed = 0.5,
         voice = "da05e96d-ca10-4220-9042-d8acef654fa9",
-
+        language = game_data.user_lang
     )    
 
     assistant = VoiceAssistant(
