@@ -166,8 +166,8 @@ async def entrypoint(ctx: JobContext):
                 logger.info(f"GM: {full_llm_text}")
                 # Запускаем обработку API в фоновом режиме
                 asyncio.create_task(handle_imagegen_api(full_llm_text, "", ctx, game_data))  
-                
-                              
+
+
             return accumulate_and_yield()
         else:
             return text
@@ -221,11 +221,23 @@ async def entrypoint(ctx: JobContext):
             Средневековый мир, где есть люди и магия.
             """
         )
-    voice = elevenlabs.Voice(
-                id=os.getenv("ELEVENLABS_VOICE_ID"),
-                name="Alice",
-                category="standard",
-                )
+
+
+    # tts = elevenlabs.TTS(
+    #         # model_id="eleven_multilingual_v2",
+    #         model_id="eleven_flash_v2_5",
+    #         voice = elevenlabs.Voice(
+    #             id=os.getenv("ELEVENLABS_VOICE_ID"),
+    #             name="Alice",
+    #             category="standard",
+    #             ),
+    #         api_key=os.getenv("ELEVENLABS_API_KEY"),
+    #     )
+    tts = cartesia.TTS(
+        speed = 0.5,
+        voice = "da05e96d-ca10-4220-9042-d8acef654fa9"
+    )    
+
     assistant = VoiceAssistant(
         vad=ctx.proc.userdata["vad"],
         stt=deepgram.STT(
@@ -235,12 +247,7 @@ async def entrypoint(ctx: JobContext):
             model="gpt-4o-mini",
         ),
         # tts=openai.TTS(),
-        tts = elevenlabs.TTS(
-            model_id="eleven_multilingual_v2",
-            voice=voice,
-            api_key=os.getenv("ELEVENLABS_API_KEY"),
-            # language=game_data.user_lang
-        ),
+        tts = tts,
         chat_ctx=initial_ctx,
         before_llm_cb=before_llm,
         before_tts_cb=before_tts,
@@ -306,7 +313,7 @@ async def entrypoint(ctx: JobContext):
     await asyncio.sleep(1)
 
     # Greets the user with an initial message
-    #await assistant.say(game_data.latest_summary.summary_text if game_data.latest_summary else "Начнём?", allow_interruptions=True)
+    await assistant.say(game_data.latest_summary.summary_text if game_data.latest_summary else "Начнём?", allow_interruptions=True)
 
 
 if __name__ == "__main__":
