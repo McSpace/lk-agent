@@ -162,9 +162,12 @@ async def entrypoint(ctx: JobContext):
                     yield chunk
                 
                 # После завершения всех чанков, можно залогировать полный текст
-                logger.info(f"GM: {''.join(full_text)}")
+                full_llm_text = ''.join(full_text)
+                logger.info(f"GM: {full_llm_text}")
                 # Запускаем обработку API в фоновом режиме
-                asyncio.create_task(handle_imagegen_api(full_text, "", ctx, game_data))                
+                asyncio.create_task(handle_imagegen_api(full_llm_text, "", ctx, game_data))  
+                
+                              
             return accumulate_and_yield()
         else:
             return text
