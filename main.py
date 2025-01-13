@@ -144,59 +144,36 @@ async def entrypoint(ctx: JobContext):
 
     async def before_llm(assistant: VoicePipelineAgent, chat_context: str | AsyncIterable[str]):
         logger.info(f"====== before_LLM =====")
-
-        current_user_text = chat_context.messages[-1].content if len(chat_context.messages) > 0 else None
-        prev_user_text = ctx.proc.userdata.get("prev_user_text")
-        logger.info(f"load prev_user_text: {prev_user_text}")
-        if prev_user_text and current_user_text.startswith(prev_user_text):
-            logger.info("Removing previous user text from current user text")
-            current_user_text = current_user_text[len(prev_user_text):]  
-            # ctx.proc.userdata["prev_user_text"] = current_user_text
-        
-        logger.info(current_user_text)
-        if current_user_text.lstrip().lower().startswith("эй"):
-            logger.info("Start working")
-
-            ctx.proc.userdata["prev_user_text"] = None
-            logger.info(f"save prev_user_text: None")
-
-
-        else:
-            logger.info("No key - cancel chat")
-            ctx.proc.userdata["prev_user_text"] = current_user_text if ctx.proc.userdata.get("prev_user_text") is None else ctx.proc.userdata["prev_user_text"] + current_user_text
-            tmp = ctx.proc.userdata.get("prev_user_text")
-            logger.info(f"save prev_user_text: {tmp}")
-
-            # logger.info(f"new last message is {chat_context.messages}")
-            return False            
+        # logger.info(f"stop")
+        # return False            
 
 
     async def before_tts(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
         logger.info("====== before_tts =====")
         # logger.info(f"chat_messages: {len(assistant.chat_ctx.messages)}")
-        logger.info(f"len text: text: {text}")
-        if isinstance(text, AsyncIterable):
-             logger.info(f"AsyncIterable")
-             #text = ''.join([chunk async for chunk in text])
-        else:
-            logger.info(f"not AsyncIterable. {text}")     
 
-        # # Ensure text is a string before adding to chat messages
-        # if isinstance(text, AsyncIterable):
-        #     logger.info(f"AsyncIterable")
-        #     text = ''.join([chunk async for chunk in text])
+        full_text = []
         
-        # chat_messages.append({
-        #     "role": "host", 
-        #     "content": text,
-            
-        # })
+        if isinstance(text, AsyncIterable):
+            async def accumulate_and_yield():
+                async for chunk in text:
+                    full_text.append(chunk)
+                    # logger.info(f"chunk: {chunk}")
+                    yield chunk
+                
+                # После завершения всех чанков, можно залогировать полный текст
+                logger.info(f"GM: {''.join(full_text)}")
+                # Запускаем обработку API в фоновом режиме
+                asyncio.create_task(handle_imagegen_api(text, "", ctx, game_data))                
+            return accumulate_and_yield()
+        else:
+            return text
         
         # # if len(chat_messages) > 2:
         # # Запускаем обработку API в фоновом режиме
         # asyncio.create_task(handle_imagegen_api(text, "", ctx, game_data))
         
-        return text
+        #return text
 
     # Connect to the LiveKit room
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
