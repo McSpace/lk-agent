@@ -164,7 +164,7 @@ async def entrypoint(ctx: JobContext):
                 # После завершения всех чанков, можно залогировать полный текст
                 logger.info(f"GM: {''.join(full_text)}")
                 # Запускаем обработку API в фоновом режиме
-                asyncio.create_task(handle_imagegen_api(text, "", ctx, game_data))                
+                asyncio.create_task(handle_imagegen_api(full_text, "", ctx, game_data))                
             return accumulate_and_yield()
         else:
             return text
