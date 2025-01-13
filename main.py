@@ -144,12 +144,14 @@ async def entrypoint(ctx: JobContext):
 
     async def before_llm(assistant: VoicePipelineAgent, chat_context: str | AsyncIterable[str]):
         logger.info(f"====== before_LLM =====")
+        print_chat_messages(assistant.chat_ctx.messages)        
         # logger.info(f"stop")
         # return False            
 
 
     async def before_tts(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
         logger.info("====== before_tts =====")
+        
         # logger.info(f"chat_messages: {len(assistant.chat_ctx.messages)}")
 
         full_text = []
@@ -195,6 +197,9 @@ async def entrypoint(ctx: JobContext):
             text = f"""
             Ты ведущий текстовой ролевой игры.
             Пользователь описывает свои действия, а ты описывешь реакцию игрового мира и персонажей в нём. 
+            Описывай только то что произошло, не повторяя то, что игрок решил сделать.
+            Если игрок описывает невозможные действия, противоречищие миру игры, напомни ему об этом и не подтверждай что это случилось. 
+            Игрок не может описать свершившиеся действия, если они не были подтверждены ведущим.
             Не придумывай за игрока его дейчствия. Используй своё воображение и креативность.
             Отвечай на '{game_data.user_lang}' языке.
 
@@ -267,7 +272,7 @@ async def entrypoint(ctx: JobContext):
     def on_agent_speech_committed(msg: llm.ChatMessage):
 
         logger.info("====== on_agent_speech_committed =====")
-        print_chat_messages(assistant.chat_ctx.messages)
+        
 
         pic_url = ctx.proc.userdata.get("pic_url")
         pic_prompt = ctx.proc.userdata.get("pic_prompt")
