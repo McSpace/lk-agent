@@ -11,7 +11,7 @@ import dotenv
 from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, JobProcess, cli, llm
 from livekit.agents.pipeline import VoicePipelineAgent
 from livekit.agents.voice_assistant import VoiceAssistant
-from livekit.plugins import deepgram, openai, silero , elevenlabs
+from livekit.plugins import deepgram, openai, silero , elevenlabs, cartesia
 from dotenv import load_dotenv
 import livekit.api
 from livekit.api import UpdateParticipantRequest
@@ -235,7 +235,8 @@ async def entrypoint(ctx: JobContext):
     #     )
     tts = cartesia.TTS(
         speed = 0.5,
-        voice = "da05e96d-ca10-4220-9042-d8acef654fa9"
+        voice = "da05e96d-ca10-4220-9042-d8acef654fa9",
+
     )    
 
     assistant = VoiceAssistant(
