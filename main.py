@@ -324,7 +324,7 @@ async def entrypoint(ctx: JobContext):
     if game_data.latest_summary:
         greeting = game_data.latest_summary.summary_text
     elif game_data.intro and len(game_data.intro) > 0:
-        greeting = game.intro
+        greeting = game_data.intro
 
     # await assistant.say(game_data.latest_summary.summary_text if game_data.latest_summary else "Начнём?", allow_interruptions=True)
     await assistant.say(greeting, allow_interruptions=True)
