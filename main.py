@@ -71,14 +71,14 @@ async def get_game_data(game_id: str) -> Optional[GameData]:
 def prewarm(proc: JobProcess):
     proc.userdata["vad"] = silero.VAD.load()
 
-async def save_next_turn_api(user_text: str, gm_text: str, game_id: str, image_url: str, pic_prompt: str):
+async def save_next_turn_api(user_text: str, gm_text: str, game_id: str, image_url: str, image_prompt: str):
     async with aiohttp.ClientSession() as session:
         payload = {
             "game_id": game_id,
             "player_text": user_text,
             "gm_response": gm_text,
             "image_url": image_url,
-            "pic_prompt": pic_prompt
+            "image_prompt": image_prompt
         } 
         logger.info("====== save_next_turn_api inside=====")
         logger.info(f"Sending payload to story API: {payload}")
@@ -114,7 +114,7 @@ async def handle_imagegen_api(gm_text, last_turn_id, ctx, game_data):
         participant = await ctx.wait_for_participant()
         if image_url:
             ctx.proc.userdata["pic_url"] = image_url
-            ctx.proc.userdata["pic_prompt"] = image_prompt
+            ctx.proc.userdata["image_prompt"] = image_prompt
             logger.info(f"====== SET PIC URL: {image_url} ===== ") 
             try:
                 await ctx.room.local_participant.publish_data(image_url,
@@ -173,6 +173,7 @@ async def entrypoint(ctx: JobContext):
 
             return accumulate_and_yield()
         else:
+            asyncio.create_task(handle_imagegen_api(text, "", ctx, game_data)) 
             return text
         
         # # if len(chat_messages) > 2:
@@ -276,14 +277,22 @@ async def entrypoint(ctx: JobContext):
         
 
         pic_url = ctx.proc.userdata.get("pic_url")
-        pic_prompt = ctx.proc.userdata.get("pic_prompt")
+        image_prompt = ctx.proc.userdata.get("image_prompt")
         logger.info(f"====== CHECK PIC URL: {pic_url} ===== ") 
         
         # Send turn to API
         if len(assistant.chat_ctx.messages) > 2:
             user_text = assistant.chat_ctx.messages[-2].content
             gm_text = assistant.chat_ctx.messages[-1].content
-            asyncio.create_task( save_next_turn_api(user_text, gm_text, str(game_data.game.id), pic_url, pic_prompt) )
+            asyncio.create_task( 
+                save_next_turn_api(
+                    user_text, 
+                    gm_text, 
+                    str(game_data.game.id), 
+                    pic_url, 
+                    image_prompt
+                    ) 
+                )
 
 
 
@@ -320,7 +329,7 @@ async def entrypoint(ctx: JobContext):
     await asyncio.sleep(1)
 
     # Greets the user with an initial message
-    greeting = "Начнём? Что вы хотите сделать?"
+    greeting = "lets start!"
     if game_data.latest_summary:
         greeting = game_data.latest_summary.summary_text
     elif game_data.intro and len(game_data.intro) > 0:
