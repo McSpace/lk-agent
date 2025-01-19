@@ -240,9 +240,15 @@ async def entrypoint(ctx: JobContext):
     #             ),
     #         api_key=os.getenv("ELEVENLABS_API_KEY"),
     #     )
+    cartesia_voice = "da05e96d-ca10-4220-9042-d8acef654fa9" # default English voice
+    if game_data.user_lang == "ru":
+            cartesia_voice = "da05e96d-ca10-4220-9042-d8acef654fa9"
+    elif game_data.user_lang == "nl":
+            cartesia_voice = "9e8db62d-056f-47f3-b3b6-1b05767f9176"
+         
     tts = cartesia.TTS(
         speed = 0.5,
-        voice = "da05e96d-ca10-4220-9042-d8acef654fa9",
+        voice = cartesia_voice,
         language = game_data.user_lang
     )    
 
