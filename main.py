@@ -196,7 +196,7 @@ async def entrypoint(ctx: JobContext):
 
             return accumulate_and_yield()
         else:
-            asyncio.create_task(handle_imagegen_api(text, "", ctx, game_data)) 
+            asyncio.create_task(handle_imagegen_api(text, "", ctx, game_data, assistant)) 
             return text
         
         # # if len(chat_messages) > 2:
