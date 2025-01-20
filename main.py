@@ -126,7 +126,30 @@ async def handle_imagegen_api(gm_text, last_turn_id, ctx, game_data):
             except Exception as e:
                 logger.error(f"Error updating participant {participant.name} attributes: {e}")
     except Exception as e:
-        logger.error(f"Error calling Story API: {e}")
+        logger.error(f"Error calling ImageGen API: {e}")
+
+    pic_url = ctx.proc.userdata.get("pic_url")
+    image_prompt = ctx.proc.userdata.get("image_prompt")
+    logger.info(f"====== CHECK PIC URL: {pic_url} ===== ") 
+    
+    # Send turn to API
+    if len(assistant.chat_ctx.messages) > 2:
+        logger.info(f"====== save_next_turn_api inside =====")
+        user_text = assistant.chat_ctx.messages[-1].content
+        logger.info(f"User text: {user_text}")
+        logger.info(f"GM text: {gm_text}")
+        logger.info(f"image_url: {pic_url}")
+        #gm_text = assistant.chat_ctx.messages[-1].content
+        asyncio.create_task( 
+            save_next_turn_api(
+                user_text, 
+                gm_text, 
+                str(game_data.game.id), 
+                pic_url, 
+                image_prompt
+                ) 
+            )
+
 
 # This function is the entrypoint for the agent.
 
@@ -286,23 +309,23 @@ async def entrypoint(ctx: JobContext):
         logger.info("====== on_agent_speech_committed =====")
         
 
-        pic_url = ctx.proc.userdata.get("pic_url")
-        image_prompt = ctx.proc.userdata.get("image_prompt")
-        logger.info(f"====== CHECK PIC URL: {pic_url} ===== ") 
+        # pic_url = ctx.proc.userdata.get("pic_url")
+        # image_prompt = ctx.proc.userdata.get("image_prompt")
+        # logger.info(f"====== CHECK PIC URL: {pic_url} ===== ") 
         
-        # Send turn to API
-        if len(assistant.chat_ctx.messages) > 2:
-            user_text = assistant.chat_ctx.messages[-2].content
-            gm_text = assistant.chat_ctx.messages[-1].content
-            asyncio.create_task( 
-                save_next_turn_api(
-                    user_text, 
-                    gm_text, 
-                    str(game_data.game.id), 
-                    pic_url, 
-                    image_prompt
-                    ) 
-                )
+        # # Send turn to API
+        # if len(assistant.chat_ctx.messages) > 2:
+        #     user_text = assistant.chat_ctx.messages[-2].content
+        #     gm_text = assistant.chat_ctx.messages[-1].content
+        #     asyncio.create_task( 
+        #         save_next_turn_api(
+        #             user_text, 
+        #             gm_text, 
+        #             str(game_data.game.id), 
+        #             pic_url, 
+        #             image_prompt
+        #             ) 
+        #         )
 
 
 
