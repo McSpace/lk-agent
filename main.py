@@ -242,14 +242,14 @@ async def entrypoint(ctx: JobContext):
     #     )
     
     
-    cartesia_voice = "da05e96d-ca10-4220-9042-d8acef654fa9" # default English voice
+    cartesia_voice = "41534e16-2966-4c6b-9670-111411def906" # default English voice
     logger.info(f"User language: {game_data.user_lang}")
     if game_data.user_lang == "ru":
             cartesia_voice = "da05e96d-ca10-4220-9042-d8acef654fa9"
     elif game_data.user_lang == "nl":
             cartesia_voice = "9e8db62d-056f-47f3-b3b6-1b05767f9176"
     logger.info(f"Cartesia voice: {cartesia_voice}")
-         
+
     tts = cartesia.TTS(
         speed = 0.5,
         voice = cartesia_voice,
