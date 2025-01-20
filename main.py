@@ -104,7 +104,7 @@ async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
             logger.info(f"Received response from story API: {result}")
             return result
 
-async def handle_imagegen_api(gm_text, last_turn_id, ctx, game_data):
+async def handle_imagegen_api(gm_text, last_turn_id, ctx, game_data, assistant):
     try:
         generator_result = await send_to_imageGen_api(gm_text, last_turn_id, game_data)
         image_url = generator_result.get('image_url') if generator_result else None
@@ -191,7 +191,7 @@ async def entrypoint(ctx: JobContext):
                 full_llm_text = ''.join(full_text)
                 logger.info(f"GM: {full_llm_text}")
                 # Запускаем обработку API в фоновом режиме
-                asyncio.create_task(handle_imagegen_api(full_llm_text, "", ctx, game_data))  
+                asyncio.create_task(handle_imagegen_api(full_llm_text, "", ctx, game_data, assistant))  
 
 
             return accumulate_and_yield()
