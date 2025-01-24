@@ -215,7 +215,16 @@ async def entrypoint(ctx: JobContext):
     
     # Fetch game data
     game_data = await get_game_data(game_id)
+    user_lang_code = "en"
+    user_lang = "English"
     if game_data:
+        if game_data.user_lang == "ru":
+            user_lang = "Russian"
+            user_lang_code = "ru"
+        elif game_data.user_lang == "nl":
+            user_lang = "Dutch"
+            user_lang_code = "nl"
+
         logger.info(f"Successfully loaded game data for game {game_id}")
         initial_ctx = llm.ChatContext().append(
             role="system",
@@ -226,7 +235,7 @@ async def entrypoint(ctx: JobContext):
             Если игрок описывает невозможные действия, противоречищие миру игры, напомни ему об этом и не подтверждай что это случилось. 
             Игрок не может описать свершившиеся действия, если они не были подтверждены ведущим.
             Не придумывай за игрока его дейчствия. Используй своё воображение и креативность.
-            Отвечай на '{game_data.user_lang}' языке.
+            Отвечай на '{user_lang}' языке.
 
             Игровой мир:
             {game_data.world_description}
@@ -266,23 +275,23 @@ async def entrypoint(ctx: JobContext):
     
     
     cartesia_voice = "41534e16-2966-4c6b-9670-111411def906" # default English voice
-    logger.info(f"User language: {game_data.user_lang}")
-    if game_data.user_lang == "ru":
+    logger.info(f"User language: {user_lang_code}")
+    if user_lang_code == "ru":
             cartesia_voice = "da05e96d-ca10-4220-9042-d8acef654fa9"
-    elif game_data.user_lang == "nl":
+    elif user_lang_code == "nl":
             cartesia_voice = "9e8db62d-056f-47f3-b3b6-1b05767f9176"
     logger.info(f"Cartesia voice: {cartesia_voice}")
 
     tts = cartesia.TTS(
         speed = 0.5,
         voice = cartesia_voice,
-        language = game_data.user_lang
+        language = user_lang_code
     )    
 
     assistant = VoiceAssistant(
         vad=ctx.proc.userdata["vad"],
         stt=deepgram.STT(
-            language=game_data.user_lang
+            language=user_lang_code
         ),
         llm=openai.LLM(
             model="gpt-4o-mini",
