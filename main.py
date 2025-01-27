@@ -90,7 +90,7 @@ async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
     async with aiohttp.ClientSession() as session:
         payload = {
             "pic_id": turn_id,
-            "chat_history": messages,
+            "chat_history": messages[-1],
             "illustration_style": game_data.image_style_prompt, #"A medieval book illustration, without borders or frames. The illustration style mirrors that of illuminated manuscripts, with vibrant colors, intricate details, and a slightly flattened perspective that allows for a comprehensive view of the scene. Touches of gold leaf accentuate important elements, adding a magical quality to the scene. The image extends to the edges, fully immersing the viewer in the setting.",
             "main_character":  game_data.character_appearance # "Our hero is a young man in his late twenties or early thirties with a strong build, short dark hair, and a clean-shaven face. He wears a striking red cloak over practical leather armor. His youthful yet experienced face suggests a mix of enthusiasm and earned wisdom."
         }
@@ -241,13 +241,16 @@ async def entrypoint(ctx: JobContext):
     #         api_key=os.getenv("ELEVENLABS_API_KEY"),
     #     )
     cartesia_voice = "da05e96d-ca10-4220-9042-d8acef654fa9" # default English voice
+    voice_speed = 1
     if game_data.user_lang == "ru":
             cartesia_voice = "da05e96d-ca10-4220-9042-d8acef654fa9"
+            voice_speed = 0.5
     elif game_data.user_lang == "nl":
             cartesia_voice = "9e8db62d-056f-47f3-b3b6-1b05767f9176"
+            voice_speed = 0.8
          
     tts = cartesia.TTS(
-        speed = 0.5,
+        speed = voice_speed,
         voice = cartesia_voice,
         language = game_data.user_lang
     )    
