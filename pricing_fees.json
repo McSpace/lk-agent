@@ -1,0 +1,160 @@
+[
+    {
+        "Id": 1,
+        "Pcc": "D0SJ",
+        "Airline": [
+            "*"
+        ],
+        "FareType": "Any",
+        "CabinClass": "Any",
+        "SupplierFee": 10
+    },
+    {
+        "Id": 2,
+        "Pcc": "I3CH",
+        "Airline": [
+            "*"
+        ],
+        "FareType": "Any",
+        "CabinClass": "Any",
+        "SupplierFee": 10
+    },
+    {
+        "Id": 4,
+        "Pcc": "SW04",
+        "Airline": [
+            "*"
+        ],
+        "FareType": "Any",
+        "CabinClass": "Any",
+        "SupplierFee": 10
+    },
+    {
+        "Id": 5,
+        "Pcc": "U3VL",
+        "Airline": [
+            "AA",
+            "UN",
+            "GL"
+        ],
+        "FareType": "Any",
+        "CabinClass": "Any",
+        "SupplierFee": 14
+    },
+    {
+        "Id": 6,
+        "Pcc": "U3VL",
+        "Airline": [
+            "*"
+        ],
+        "FareType": "Any",
+        "CabinClass": "Any",
+        "SupplierFee": 7
+    },
+    {
+        "Id": 10,
+        "Pcc": "SW04",
+        "Airline": [
+            "NZ"
+        ],
+        "FareType": "Any",
+        "CabinClass": "Economy",
+        "SupplierFee": 75
+    },
+    {
+        "Id": 11,
+        "Pcc": "SW04",
+        "Airline": [
+            "NZ"
+        ],
+        "FareType": "Any",
+        "CabinClass": "PremiumEconomy",
+        "SupplierFee": 300
+    },
+    {
+        "Id": 12,
+        "Pcc": "SW04",
+        "Airline": [
+            "NZ"
+        ],
+        "FareType": "Any",
+        "CabinClass": "Business",
+        "SupplierFee": 300
+    },
+    {
+        "Id": 17,
+        "Pcc": "SW04",
+        "Airline": [
+            "EK"
+        ],
+        "FareType": "Any",
+        "CabinClass": "Any",
+        "SupplierFee": 50
+    },
+    {
+        "Id": 13,
+        "Pcc": "5Q81",
+        "Airline": [
+            "*"
+        ],
+        "FareType": "Any",
+        "CabinClass": "Any",
+        "SupplierFee": 10
+    },
+    {
+        "Id": 16,
+        "Pcc": "D0SJ",
+        "Airline": [
+            "*"
+        ],
+        "FareType": "Any",
+        "CabinClass": "First",
+        "SupplierFee": 25
+    },
+    {
+        "Id": 3,
+        "Pcc": "O77I",
+        "Airline": [
+            "*"
+        ],
+        "FareType": "Any",
+        "CabinClass": "Any",
+        "SupplierFee": 10
+    },
+    {
+        "Id": 19,
+        "Pcc": "O77I",
+        "Airline": [
+            "TP",
+            "QR"
+        ],
+        "FareType": "Any",
+        "CabinClass": "Any",
+        "SupplierFee": 25
+    },
+    {
+        "Id": 20,
+        "Pcc": "O77I",
+        "Airline": [
+            "SQ",
+            "JL",
+            "AA",
+            "BA",
+            "IB",
+            "AY"
+        ],
+        "FareType": "Any",
+        "CabinClass": "Any",
+        "SupplierFee": 50
+    },
+    {
+        "Id": 18,
+        "Pcc": "O77I",
+        "Airline": [
+            "CX"
+        ],
+        "FareType": "Any",
+        "CabinClass": "Any",
+        "SupplierFee": 100
+    }
+]

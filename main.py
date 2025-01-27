@@ -104,7 +104,7 @@ async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
             logger.info(f"Received response from story API: {result}")
             return result
 
-async def handle_imagegen_api(gm_text, last_turn_id, ctx, game_data):
+async def handle_imagegen_api(gm_text, last_turn_id, ctx, game_data, assistant):
     try:
         generator_result = await send_to_imageGen_api(gm_text, last_turn_id, game_data)
         image_url = generator_result.get('image_url') if generator_result else None
@@ -126,7 +126,30 @@ async def handle_imagegen_api(gm_text, last_turn_id, ctx, game_data):
             except Exception as e:
                 logger.error(f"Error updating participant {participant.name} attributes: {e}")
     except Exception as e:
-        logger.error(f"Error calling Story API: {e}")
+        logger.error(f"Error calling ImageGen API: {e}")
+
+    pic_url = ctx.proc.userdata.get("pic_url")
+    image_prompt = ctx.proc.userdata.get("image_prompt")
+    logger.info(f"====== CHECK PIC URL: {pic_url} ===== ") 
+    
+    # Send turn to API
+    if len(assistant.chat_ctx.messages) > 2:
+        logger.info(f"====== save_next_turn_api inside =====")
+        user_text = assistant.chat_ctx.messages[-1].content
+        logger.info(f"User text: {user_text}")
+        logger.info(f"GM text: {gm_text}")
+        logger.info(f"image_url: {pic_url}")
+        #gm_text = assistant.chat_ctx.messages[-1].content
+        asyncio.create_task( 
+            save_next_turn_api(
+                user_text, 
+                gm_text, 
+                str(game_data.game.id), 
+                pic_url, 
+                image_prompt
+                ) 
+            )
+
 
 # This function is the entrypoint for the agent.
 
@@ -168,12 +191,12 @@ async def entrypoint(ctx: JobContext):
                 full_llm_text = ''.join(full_text)
                 logger.info(f"GM: {full_llm_text}")
                 # Запускаем обработку API в фоновом режиме
-                asyncio.create_task(handle_imagegen_api(full_llm_text, "", ctx, game_data))  
+                asyncio.create_task(handle_imagegen_api(full_llm_text, "", ctx, game_data, assistant))  
 
 
             return accumulate_and_yield()
         else:
-            asyncio.create_task(handle_imagegen_api(text, "", ctx, game_data)) 
+            asyncio.create_task(handle_imagegen_api(text, "", ctx, game_data, assistant)) 
             return text
         
         # # if len(chat_messages) > 2:
@@ -192,7 +215,16 @@ async def entrypoint(ctx: JobContext):
     
     # Fetch game data
     game_data = await get_game_data(game_id)
+    user_lang_code = "en"
+    user_lang = "English"
     if game_data:
+        if game_data.user_lang == "ru":
+            user_lang = "Russian"
+            user_lang_code = "ru"
+        elif game_data.user_lang == "nl":
+            user_lang = "Dutch"
+            user_lang_code = "nl"
+
         logger.info(f"Successfully loaded game data for game {game_id}")
         initial_ctx = llm.ChatContext().append(
             role="system",
@@ -203,7 +235,7 @@ async def entrypoint(ctx: JobContext):
             Если игрок описывает невозможные действия, противоречищие миру игры, напомни ему об этом и не подтверждай что это случилось. 
             Игрок не может описать свершившиеся действия, если они не были подтверждены ведущим.
             Не придумывай за игрока его дейчствия. Используй своё воображение и креативность.
-            Отвечай на '{game_data.user_lang}' языке.
+            Отвечай на '{user_lang}' языке.
 
             Игровой мир:
             {game_data.world_description}
@@ -252,13 +284,13 @@ async def entrypoint(ctx: JobContext):
     tts = cartesia.TTS(
         speed = voice_speed,
         voice = cartesia_voice,
-        language = game_data.user_lang
+        language = user_lang_code
     )    
 
     assistant = VoiceAssistant(
         vad=ctx.proc.userdata["vad"],
         stt=deepgram.STT(
-            language=game_data.user_lang
+            language=user_lang_code
         ),
         llm=openai.LLM(
             model="gpt-4o-mini",
@@ -285,23 +317,23 @@ async def entrypoint(ctx: JobContext):
         logger.info("====== on_agent_speech_committed =====")
         
 
-        pic_url = ctx.proc.userdata.get("pic_url")
-        image_prompt = ctx.proc.userdata.get("image_prompt")
-        logger.info(f"====== CHECK PIC URL: {pic_url} ===== ") 
+        # pic_url = ctx.proc.userdata.get("pic_url")
+        # image_prompt = ctx.proc.userdata.get("image_prompt")
+        # logger.info(f"====== CHECK PIC URL: {pic_url} ===== ") 
         
-        # Send turn to API
-        if len(assistant.chat_ctx.messages) > 2:
-            user_text = assistant.chat_ctx.messages[-2].content
-            gm_text = assistant.chat_ctx.messages[-1].content
-            asyncio.create_task( 
-                save_next_turn_api(
-                    user_text, 
-                    gm_text, 
-                    str(game_data.game.id), 
-                    pic_url, 
-                    image_prompt
-                    ) 
-                )
+        # # Send turn to API
+        # if len(assistant.chat_ctx.messages) > 2:
+        #     user_text = assistant.chat_ctx.messages[-2].content
+        #     gm_text = assistant.chat_ctx.messages[-1].content
+        #     asyncio.create_task( 
+        #         save_next_turn_api(
+        #             user_text, 
+        #             gm_text, 
+        #             str(game_data.game.id), 
+        #             pic_url, 
+        #             image_prompt
+        #             ) 
+        #         )
 
 
 
