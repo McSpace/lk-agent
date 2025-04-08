@@ -4,6 +4,7 @@ livekit-plugins-elevenlabs
 livekit-plugins-cartesia
 livekit-plugins-deepgram>=0.6.8
 livekit-plugins-silero>=0.7.1
+livekit-plugins-turn-detector>=0.4.4
 python-dotenv~=1.0
 aiofile~=3.8.8
 aiofile
