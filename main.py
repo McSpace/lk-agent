@@ -11,7 +11,9 @@ import dotenv
 from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, JobProcess, cli, llm
 from livekit.agents.pipeline import VoicePipelineAgent
 from livekit.agents.voice_assistant import VoiceAssistant
+from livekit.agents import VoicePipelineAgent, vad
 from livekit.plugins import deepgram, openai, silero , elevenlabs, cartesia
+from livekit.plugins import turn_detector
 from dotenv import load_dotenv
 import livekit.api
 from livekit.api import UpdateParticipantRequest
@@ -70,6 +72,7 @@ async def get_game_data(game_id: str) -> Optional[GameData]:
 
 def prewarm(proc: JobProcess):
     proc.userdata["vad"] = silero.VAD.load()
+    proc.userdata["turn_det"] = turn_detector.TurnDetector()
 
 async def save_next_turn_api(user_text: str, gm_text: str, game_id: str, image_url: str, image_prompt: str):
     async with aiohttp.ClientSession() as session:
@@ -289,6 +292,7 @@ async def entrypoint(ctx: JobContext):
 
     assistant = VoiceAssistant(
         vad=ctx.proc.userdata["vad"],
+        turn_detector=ctx.proc.userdata["turn_det"],
         stt=deepgram.STT(
             language=user_lang_code
         ),
