@@ -11,7 +11,7 @@ import dotenv
 from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, JobProcess, cli, llm
 from livekit.agents.pipeline import VoicePipelineAgent
 from livekit.agents.voice_assistant import VoiceAssistant
-from livekit.agents import VoicePipelineAgent, vad
+# from livekit.agents import VoicePipelineAgent, vad
 from livekit.plugins import deepgram, openai, silero , elevenlabs, cartesia
 from livekit.plugins import turn_detector
 from dotenv import load_dotenv
