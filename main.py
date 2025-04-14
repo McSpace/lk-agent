@@ -297,7 +297,8 @@ async def entrypoint(ctx: JobContext):
             language=user_lang_code
         ),
         llm=openai.LLM(
-            model="gpt-4o-mini",
+            # model="gpt-4o-mini",
+            model="gpt-4.1-nano",
         ),
         # tts=openai.TTS(),
         tts = tts,
