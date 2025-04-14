@@ -1,4 +1,5 @@
 livekit-agents>=0.10.2
+livekit.agents.pipeline
 livekit-plugins-openai>=0.10.3
 livekit-plugins-elevenlabs
 livekit-plugins-cartesia
