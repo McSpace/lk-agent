@@ -1,32 +1,26 @@
 import asyncio
-from typing import AsyncIterable, overload
+from typing import AsyncIterable
 from aiofile import async_open as open
 from datetime import datetime
 import aiohttp
-import json
 import os
 import dotenv
 
-
 from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, JobProcess, cli, llm
-# from livekit.agents.pipeline import VoicePipelineAgent
-# from livekit.agents.voice_assistant import VoiceAssistant
-from livekit.agents import VoiceAssistant
-# from livekit.agents import VoicePipelineAgent, vad
-from livekit.plugins import deepgram, openai, silero , elevenlabs, cartesia
+from livekit.agents import VoiceAgent, TranscriptionAgent, TTSAgent
+from livekit.plugins import deepgram, openai, silero, cartesia
 from livekit.plugins import turn_detector
 from dotenv import load_dotenv
 import livekit.api
-from livekit.api import UpdateParticipantRequest
 
 import logging
 from uuid import UUID
 from pydantic import BaseModel
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 load_dotenv()
 
-logger = logging.getLogger("deepgram-stt-demo")
+logger = logging.getLogger("rpg-agent")
 logger.setLevel(logging.INFO)
 
 # Models for Story API
@@ -57,7 +51,6 @@ class GameData(BaseModel):
     user_lang: str
 
 async def get_game_data(game_id: str) -> Optional[GameData]:
-    """Fetch game data from Story API"""
     try:
         async with aiohttp.ClientSession() as session:
             url = f"{os.getenv('STORY_API_URL')}/games/{game_id}"
@@ -75,6 +68,20 @@ def prewarm(proc: JobProcess):
     proc.userdata["vad"] = silero.VAD.load()
     proc.userdata["turn_det"] = turn_detector.TurnDetector()
 
+async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
+    async with aiohttp.ClientSession() as session:
+        payload = {
+            "pic_id": turn_id,
+            "chat_history": messages[-1],
+            "illustration_style": game_data.image_style_prompt,
+            "main_character": game_data.character_appearance
+        }
+        logger.info("Sending image generation payload: %s", payload)
+        async with session.post("https://storyimagegen-production.up.railway.app/process_chat", 
+                                timeout=60,
+                                json=payload) as response:
+            return await response.json()
+
 async def save_next_turn_api(user_text: str, gm_text: str, game_id: str, image_url: str, image_prompt: str):
     async with aiohttp.ClientSession() as session:
         payload = {
@@ -83,142 +90,37 @@ async def save_next_turn_api(user_text: str, gm_text: str, game_id: str, image_u
             "gm_response": gm_text,
             "image_url": image_url,
             "image_prompt": image_prompt
-        } 
-        logger.info("====== save_next_turn_api inside=====")
-        logger.info(f"Sending payload to story API: {payload}")
-        async with session.post(f"{os.getenv('STORY_API_URL')}/turns", json=payload) as response:
-            response_json = await response.json()
-            logger.info(f"API Response: {response_json}")
-            return 
-async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
-    async with aiohttp.ClientSession() as session:
-        payload = {
-            "pic_id": turn_id,
-            "chat_history": messages[-1],
-            "illustration_style": game_data.image_style_prompt, #"A medieval book illustration, without borders or frames. The illustration style mirrors that of illuminated manuscripts, with vibrant colors, intricate details, and a slightly flattened perspective that allows for a comprehensive view of the scene. Touches of gold leaf accentuate important elements, adding a magical quality to the scene. The image extends to the edges, fully immersing the viewer in the setting.",
-            "main_character":  game_data.character_appearance # "Our hero is a young man in his late twenties or early thirties with a strong build, short dark hair, and a clean-shaven face. He wears a striking red cloak over practical leather armor. His youthful yet experienced face suggests a mix of enthusiasm and earned wisdom."
         }
-        logger.info("====== send_to_imageGen_api inside=====")
-        logger.info(f"Sending payload to story API: {payload}")
-        async with session.post("https://storyimagegen-production.up.railway.app/process_chat", 
-                                timeout=60,
-                                json=payload
-                                ) as response:
-            result = await response.json()
-            logger.info(f"Received response from story API: {result}")
-            return result
+        logger.info("Saving turn to API: %s", payload)
+        await session.post(f"{os.getenv('STORY_API_URL')}/turns", json=payload)
 
-async def handle_imagegen_api(gm_text, last_turn_id, ctx, game_data, assistant):
+async def handle_imagegen_api(gm_text, last_turn_id, ctx, game_data, agent):
     try:
-        generator_result = await send_to_imageGen_api(gm_text, last_turn_id, game_data)
-        image_url = generator_result.get('image_url') if generator_result else None
-        image_prompt = generator_result.get('illustration_prompt') if generator_result else None
-        logger.info(f"Story API called successfully. Image URL: {image_url}")
+        result = await send_to_imageGen_api(agent.chat_ctx.messages, last_turn_id, game_data)
+        image_url = result.get('image_url')
+        image_prompt = result.get('illustration_prompt')
 
-        participant = await ctx.wait_for_participant()
         if image_url:
             ctx.proc.userdata["pic_url"] = image_url
             ctx.proc.userdata["image_prompt"] = image_prompt
-            logger.info(f"====== SET PIC URL: {image_url} ===== ") 
-            try:
-                await ctx.room.local_participant.publish_data(image_url,
-                                reliable=True,
-                                destination_identities=[participant.identity],
-                                topic="topic1")  
-                logger.info(f"====== PUSH DATA SENT to {participant.identity} ===== ")
+            participant = await ctx.wait_for_participant()
+            await ctx.room.local_participant.publish_data(image_url,
+                                                           reliable=True,
+                                                           destination_identities=[participant.identity],
+                                                           topic="topic1")
 
-            except Exception as e:
-                logger.error(f"Error updating participant {participant.name} attributes: {e}")
+            if len(agent.chat_ctx.messages) > 2:
+                user_text = agent.chat_ctx.messages[-1].content
+                await save_next_turn_api(user_text, gm_text, str(game_data.game.id), image_url, image_prompt)
     except Exception as e:
-        logger.error(f"Error calling ImageGen API: {e}")
-
-    pic_url = ctx.proc.userdata.get("pic_url")
-    image_prompt = ctx.proc.userdata.get("image_prompt")
-    logger.info(f"====== CHECK PIC URL: {pic_url} ===== ") 
-    
-    # Send turn to API
-    if len(assistant.chat_ctx.messages) > 2:
-        logger.info(f"====== save_next_turn_api inside =====")
-        user_text = assistant.chat_ctx.messages[-1].content
-        logger.info(f"User text: {user_text}")
-        logger.info(f"GM text: {gm_text}")
-        logger.info(f"image_url: {pic_url}")
-        #gm_text = assistant.chat_ctx.messages[-1].content
-        asyncio.create_task( 
-            save_next_turn_api(
-                user_text, 
-                gm_text, 
-                str(game_data.game.id), 
-                pic_url, 
-                image_prompt
-                ) 
-            )
-
-
-# This function is the entrypoint for the agent.
-
-def print_chat_messages(chat_messages):
-    for message in chat_messages:
-        logger.info(f"- {message.role}: {message.content[:15] if message.content and len(message.content) >= 15 else message.content}...")
-
+        logger.error(f"ImageGen API error: {e}")
 
 async def entrypoint(ctx: JobContext):
-    logger.info(f"ctx.room: {ctx.room}")
-
-    chat_messages = []
-    # current_user_text = None
-    # prev_user_text = ""
-    lkapi = livekit.api.LiveKitAPI()
-
-    async def before_llm(assistant: VoiceAssistant, chat_context: str | AsyncIterable[str]):
-        logger.info(f"====== before_LLM =====")
-        print_chat_messages(assistant.chat_ctx.messages)        
-        # logger.info(f"stop")
-        # return False            
-
-
-    async def before_tts(assistant: VoiceAssistant, text: str | AsyncIterable[str]):
-        logger.info("====== before_tts =====")
-        
-        # logger.info(f"chat_messages: {len(assistant.chat_ctx.messages)}")
-
-        full_text = []
-        
-        if isinstance(text, AsyncIterable):
-            async def accumulate_and_yield():
-                async for chunk in text:
-                    full_text.append(chunk)
-                    # logger.info(f"chunk: {chunk}")
-                    yield chunk
-                
-                # После завершения всех чанков, можно залогировать полный текст
-                full_llm_text = ''.join(full_text)
-                logger.info(f"GM: {full_llm_text}")
-                # Запускаем обработку API в фоновом режиме
-                asyncio.create_task(handle_imagegen_api(full_llm_text, "", ctx, game_data, assistant))  
-
-
-            return accumulate_and_yield()
-        else:
-            asyncio.create_task(handle_imagegen_api(text, "", ctx, game_data, assistant)) 
-            return text
-        
-        # # if len(chat_messages) > 2:
-        # # Запускаем обработку API в фоновом режиме
-        # asyncio.create_task(handle_imagegen_api(text, "", ctx, game_data))
-        
-        #return text
-
-    # Connect to the LiveKit room
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
 
-    logger.info(f"====== ctx.room = {ctx.room} =====")
-    
-    # Load game data from story-API   
     game_id = ctx.room.name
-    
-    # Fetch game data
     game_data = await get_game_data(game_id)
+
     user_lang_code = "en"
     user_lang = "English"
     if game_data:
@@ -229,166 +131,83 @@ async def entrypoint(ctx: JobContext):
             user_lang = "Dutch"
             user_lang_code = "nl"
 
-        logger.info(f"Successfully loaded game data for game {game_id}")
-        initial_ctx = llm.ChatContext().append(
-            role="system",
-            text = f"""
-            Ты ведущий текстовой ролевой игры.
-            Пользователь описывает свои действия, а ты описывешь реакцию игрового мира и персонажей в нём. 
-            Описывай только то что произошло, не повторяя то, что игрок решил сделать.
-            Если игрок описывает невозможные действия, противоречищие миру игры, напомни ему об этом и не подтверждай что это случилось. 
-            Игрок не может описать свершившиеся действия, если они не были подтверждены ведущим.
-            Не придумывай за игрока его дейчствия. Используй своё воображение и креативность.
-            Отвечай на '{user_lang}' языке.
+    initial_ctx = llm.ChatContext().append(
+        role="system",
+        text=f"""
+        Ты ведущий текстовой ролевой игры.
+        Пользователь описывает свои действия, а ты описываешь реакцию мира.
+        Отвечай на '{user_lang}' языке.
 
-            Игровой мир:
-            {game_data.world_description}
+        Игровой мир:
+        {game_data.world_description if game_data else 'Средневековый мир с магией'}
 
-            Персонаж игрока:
-            {game_data.character_description}
+        Персонаж:
+        {game_data.character_description if game_data else 'Неизвестный герой'}
 
-            
-            {f"Текущее состояние игры: {game_data.latest_summary.summary_text}"  if game_data.latest_summary else ""}
-            """
-        )
-    else:
-        logger.error(f"Failed to load game data for game {game_id}, using default context")
-        initial_ctx = llm.ChatContext().append(
-            role="system",
-            text = """
-            Ты ведущий текстовой ролевой игры.
-            Пользователь описывает свои действия, а ты описывешь реакцию игрового мира и персонажей в нём. 
-            Не придумывай за игрока его дейчствия. 
-
-            Игровой мир:
-            Средневековый мир, где есть люди и магия.
-            """
-        )
-
-
-    # tts = elevenlabs.TTS(
-    #         # model_id="eleven_multilingual_v2",
-    #         model_id="eleven_flash_v2_5",
-    #         voice = elevenlabs.Voice(
-    #             id=os.getenv("ELEVENLABS_VOICE_ID"),
-    #             name="Alice",
-    #             category="standard",
-    #             ),
-    #         api_key=os.getenv("ELEVENLABS_API_KEY"),
-    #     )
-    cartesia_voice = "da05e96d-ca10-4220-9042-d8acef654fa9" # default English voice
-    voice_speed = 1
-    if game_data.user_lang == "ru":
-            cartesia_voice = "da05e96d-ca10-4220-9042-d8acef654fa9"
-            voice_speed = 0.5
-    elif game_data.user_lang == "nl":
-            cartesia_voice = "9e8db62d-056f-47f3-b3b6-1b05767f9176"
-            voice_speed = 0.8
-         
-    tts = cartesia.TTS(
-        speed = voice_speed,
-        voice = cartesia_voice,
-        language = user_lang_code
-    )    
-
-    assistant = VoiceAssistant(
-        vad=ctx.proc.userdata["vad"],
-        turn_detector=ctx.proc.userdata["turn_det"],
-        stt=deepgram.STT(
-            language=user_lang_code
-        ),
-        llm=openai.LLM(
-            # model="gpt-4o-mini",
-            model="gpt-4.1-nano",
-        ),
-        # tts=openai.TTS(),
-        tts = tts,
-        chat_ctx=initial_ctx,
-        before_llm_cb=before_llm,
-        before_tts_cb=before_tts,
-
+        {f'Текущее состояние: {game_data.latest_summary.summary_text}' if game_data and game_data.latest_summary else ''}
+        """
     )
 
-    # Start the voice assistant with the LiveKit room
-    assistant.start(ctx.room)
+    tts = cartesia.TTS(
+        speed=0.5 if user_lang_code == "ru" else (0.8 if user_lang_code == "nl" else 1),
+        voice="da05e96d-ca10-4220-9042-d8acef654fa9" if user_lang_code == "ru" else (
+            "9e8db62d-056f-47f3-b3b6-1b05767f9176" if user_lang_code == "nl" else "da05e96d-ca10-4220-9042-d8acef654fa9"
+        ),
+        language=user_lang_code
+    )
 
-    api_queue = asyncio.Queue()
+    agent = VoiceAgent(
+        stt=deepgram.STT(language=user_lang_code),
+        tts=tts,
+        llm=openai.LLM(model="gpt-4.1-nano"),
+        chat_ctx=initial_ctx,
+    )
 
-    participant = await ctx.wait_for_participant()
-    logger.info(f"Get participant: {participant}")
+    async def before_llm(agent: VoiceAgent, chat_ctx: AsyncIterable[str] | str):
+        logger.info("Before LLM callback triggered")
+        for msg in agent.chat_ctx.messages:
+            logger.info(f"{msg.role}: {msg.content}")
 
-    @assistant.on("agent_speech_committed")
-    def on_agent_speech_committed(msg: llm.ChatMessage):
+    async def before_tts(agent: VoiceAgent, text: AsyncIterable[str] | str):
+        logger.info("Before TTS callback triggered")
 
-        logger.info("====== on_agent_speech_committed =====")
-        
-
-        # pic_url = ctx.proc.userdata.get("pic_url")
-        # image_prompt = ctx.proc.userdata.get("image_prompt")
-        # logger.info(f"====== CHECK PIC URL: {pic_url} ===== ") 
-        
-        # # Send turn to API
-        # if len(assistant.chat_ctx.messages) > 2:
-        #     user_text = assistant.chat_ctx.messages[-2].content
-        #     gm_text = assistant.chat_ctx.messages[-1].content
-        #     asyncio.create_task( 
-        #         save_next_turn_api(
-        #             user_text, 
-        #             gm_text, 
-        #             str(game_data.game.id), 
-        #             pic_url, 
-        #             image_prompt
-        #             ) 
-        #         )
-
-
-
-
-    @assistant.on("user_speech_committed")
-    def on_user_speech_committed(msg: llm.ChatMessage):
-        logger.info("====== user_speech_committed ===")
-        logger.info(f"User message: {msg.content}")
-        # Добавляем данные в очередь для отправки на API
-        # text = api_queue.put_nowait((msg.content, "user"))
-        # logger.info(text)
-        
-        # Добавляем сообщение пользователя в список сообщений чата
-        chat_messages.append({"role": "player", "content": msg.content})
-        logger.info(f"Added player message to chat. Total messages: {len(chat_messages)}")
-
-    async def on_session_end():
-        logger.info("====== on_session_end. time to generate Preview =====")
-        if len(assistant.chat_ctx.messages) > 2:
-            async with aiohttp.ClientSession() as session:
-                payload = {} 
-                logger.info("====== save_next_turn_api inside=====")
-                logger.info(f"Sending payload to story API: {payload}")
-                async with session.post(f"{os.getenv('STORY_API_URL')}/summary/{game_id}/generate", json=payload) as response:
-                    response_json = await response.json()
-                    logger.info(f"summary generate API Response: {response_json}")
-                    return 
+        full_text = []
+        if isinstance(text, AsyncIterable):
+            async def stream():
+                async for chunk in text:
+                    full_text.append(chunk)
+                    yield chunk
+                final_text = ''.join(full_text)
+                logger.info(f"Final text: {final_text}")
+                asyncio.create_task(handle_imagegen_api(final_text, "", ctx, game_data, agent))
+            return stream()
         else:
-            logger.info("====== Not enough messages to generate summary =====")
-        
+            asyncio.create_task(handle_imagegen_api(text, "", ctx, game_data, agent))
+            return text
 
-    ctx.add_shutdown_callback(on_session_end)  
+    agent.before_llm_cb = before_llm
+    agent.before_tts_cb = before_tts
 
-    await asyncio.sleep(1)
+    @agent.on("user_speech_committed")
+    def on_user(msg: llm.ChatMessage):
+        logger.info(f"User said: {msg.content}")
 
-    # Greets the user with an initial message
-    greeting = "lets start!"
-    if game_data.latest_summary:
-        greeting = game_data.latest_summary.summary_text
-    elif game_data.intro and len(game_data.intro) > 0:
-        greeting = game_data.intro
+    @agent.on("agent_speech_committed")
+    def on_agent(msg: llm.ChatMessage):
+        logger.info(f"Agent said: {msg.content}")
 
-    # await assistant.say(game_data.latest_summary.summary_text if game_data.latest_summary else "Начнём?", allow_interruptions=True)
-    await assistant.say(greeting, allow_interruptions=True)
+    ctx.add_shutdown_callback(lambda: logger.info("Session ended."))
 
+    agent.start(ctx.room)
+
+    greeting = game_data.latest_summary.summary_text if game_data and game_data.latest_summary else (
+        game_data.intro if game_data and game_data.intro else "Let's start!"
+    )
+    await agent.say(greeting, allow_interruptions=True)
 
 if __name__ == "__main__":
-    # Initialize the worker with the entrypoint
     cli.run_app(WorkerOptions(
         shutdown_process_timeout=5,
-        entrypoint_fnc=entrypoint, 
-        prewarm_fnc=prewarm))
+        entrypoint_fnc=entrypoint,
+        prewarm_fnc=prewarm
+    ))
