@@ -9,7 +9,7 @@ import dotenv
 
 
 from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, JobProcess, cli, llm
-from livekit.agents.pipeline import VoicePipelineAgent
+# from livekit.agents.pipeline import VoicePipelineAgent
 # from livekit.agents.voice_assistant import VoiceAssistant
 from livekit.agents import VoiceAssistant
 # from livekit.agents import VoicePipelineAgent, vad
@@ -170,14 +170,14 @@ async def entrypoint(ctx: JobContext):
     # prev_user_text = ""
     lkapi = livekit.api.LiveKitAPI()
 
-    async def before_llm(assistant: VoicePipelineAgent, chat_context: str | AsyncIterable[str]):
+    async def before_llm(assistant: VoiceAssistant, chat_context: str | AsyncIterable[str]):
         logger.info(f"====== before_LLM =====")
         print_chat_messages(assistant.chat_ctx.messages)        
         # logger.info(f"stop")
         # return False            
 
 
-    async def before_tts(assistant: VoicePipelineAgent, text: str | AsyncIterable[str]):
+    async def before_tts(assistant: VoiceAssistant, text: str | AsyncIterable[str]):
         logger.info("====== before_tts =====")
         
         # logger.info(f"chat_messages: {len(assistant.chat_ctx.messages)}")
