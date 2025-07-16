@@ -163,7 +163,7 @@ async def entrypoint(ctx: JobContext):
 
     session = AgentSession(
         stt=deepgram.STT(language=user_lang_code),
-        llm=openai.LLM(model="gpt-4.1-nano"),
+        llm=openai.LLM(model="o4-mini"),
         tts=cartesia.TTS(
             speed=0.5 if user_lang_code == "ru" else (0.8 if user_lang_code == "nl" else 1),
             voice="da05e96d-ca10-4220-9042-d8acef654fa9" if user_lang_code == "ru" else (
