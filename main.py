@@ -183,12 +183,22 @@ async def entrypoint(ctx: JobContext):
     def on_agent_state_changed(ev):
         logger.info(f"Agent state changed: {ev.old_state} -> {ev.new_state}")
 
+    @session.on("participant_connected")
+    def on_participant_connected(participant):
+        logger.info(f"Participant connected: {participant.identity}")
+
+    @session.on("track_subscribed")
+    def on_track_subscribed(track, publication, participant):
+        logger.info(f"Track subscribed: {track.sid} from participant {participant.identity}")
+
     ctx.add_shutdown_callback(lambda: logger.info("Session ended."))
 
+    logger.info("Starting agent session")
     await session.start(
         room=ctx.room,
         agent=assistant,
     )
+    logger.info("Agent session started")
 
     greeting = game_data.latest_summary.summary_text if game_data and game_data.latest_summary else (
         game_data.intro if game_data and game_data.intro else "Let's start!"
