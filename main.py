@@ -30,6 +30,7 @@ load_dotenv()
 
 logger = logging.getLogger("rpg-agent")
 logger.setLevel(logging.INFO)
+logging.getLogger("livekit").setLevel(logging.CRITICAL)
 
 # Models for Story API
 class Game(BaseModel):
