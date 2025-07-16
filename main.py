@@ -118,7 +118,6 @@ class Assistant(Agent):
         )
         self.game_data = game_data
         self.ctx = ctx
-        self.chat_ctx = llm.ChatContext()
 
     # async def handle_imagegen_api(self, gm_text, last_turn_id):
     #     try:
