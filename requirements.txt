@@ -1,11 +1,12 @@
 # requirements.in
-livekit-agents==1.0.11
-livekit-plugins-openai>=0.10.3
+livekit-agents>=1.0.11
+livekit-plugins-openai
 livekit-plugins-elevenlabs
 livekit-plugins-cartesia
-livekit-plugins-deepgram>=0.6.8
-livekit-plugins-silero>=0.7.1
-livekit-plugins-turn-detector>=0.4.4
+livekit-plugins-deepgram
+livekit-plugins-silero
+livekit-plugins-turn-detector
+livekit-plugins-google
 aiohttp
 aiofile
 python-dotenv~=1.0
