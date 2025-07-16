@@ -148,7 +148,7 @@ async def entrypoint(ctx: JobContext):
     initial_ctx = llm.ChatContext()
     initial_ctx.add_message(
         role="system",
-        text=f"""
+        content=f"""
         Ты ведущий текстовой ролевой игры.
         Пользователь описывает свои действия, а ты описываешь реакцию мира.
         Отвечай на '{user_lang}' языке.
