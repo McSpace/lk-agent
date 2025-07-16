@@ -72,31 +72,31 @@ async def get_game_data(game_id: str) -> Optional[GameData]:
         logger.error(f"Error fetching game data: {e}")
         return None
 
-async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
-    async with aiohttp.ClientSession() as session:
-        payload = {
-            "pic_id": turn_id,
-            "chat_history": messages[-1],
-            "illustration_style": game_data.image_style_prompt,
-            "main_character": game_data.character_appearance
-        }
-        logger.info("Sending image generation payload: %s", payload)
-        async with session.post("https://storyimagegen-production.up.railway.app/process_chat", 
-                                timeout=60,
-                                json=payload) as response:
-            return await response.json()
+# async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
+#     async with aiohttp.ClientSession() as session:
+#         payload = {
+#             "pic_id": turn_id,
+#             "chat_history": messages[-1],
+#             "illustration_style": game_data.image_style_prompt,
+#             "main_character": game_data.character_appearance
+#         }
+#         logger.info("Sending image generation payload: %s", payload)
+#         async with session.post("https://storyimagegen-production.up.railway.app/process_chat",
+#                                 timeout=60,
+#                                 json=payload) as response:
+#             return await response.json()
 
-async def save_next_turn_api(user_text: str, gm_text: str, game_id: str, image_url: str, image_prompt: str):
-    async with aiohttp.ClientSession() as session:
-        payload = {
-            "game_id": game_id,
-            "player_text": user_text,
-            "gm_response": gm_text,
-            "image_url": image_url,
-            "image_prompt": image_prompt
-        }
-        logger.info("Saving turn to API: %s", payload)
-        await session.post(f"{os.getenv('STORY_API_URL')}/turns", json=payload)
+# async def save_next_turn_api(user_text: str, gm_text: str, game_id: str, image_url: str, image_prompt: str):
+#     async with aiohttp.ClientSession() as session:
+#         payload = {
+#             "game_id": game_id,
+#             "player_text": user_text,
+#             "gm_response": gm_text,
+#             "image_url": image_url,
+#             "image_prompt": image_prompt
+#         }
+#         logger.info("Saving turn to API: %s", payload)
+#         await session.post(f"{os.getenv('STORY_API_URL')}/turns", json=payload)
 
 
 class Assistant(Agent):
@@ -106,51 +106,27 @@ class Assistant(Agent):
         self.ctx = ctx
         self.chat_ctx = llm.ChatContext()
 
-    async def llm_node(self, chat_ctx: llm.ChatContext, model_settings: llm.ModelSettings) -> AsyncIterable[llm.ChatChunk]:
-        logger.info("Before LLM callback triggered")
-        for msg in chat_ctx.messages:
-            logger.info(f"{msg.role}: {msg.content}")
+    # async def handle_imagegen_api(self, gm_text, last_turn_id):
+    #     try:
+    #         chat_history = await self.get_chat_history()
+    #         result = await send_to_imageGen_api(chat_history, last_turn_id, self.game_data)
+    #         image_url = result.get('image_url')
+    #         image_prompt = result.get('illustration_prompt')
 
-        return Agent.default.llm_node(self, chat_ctx, model_settings)
+    #         if image_url:
+    #             self.ctx.proc.userdata["pic_url"] = image_url
+    #             self.ctx.proc.userdata["image_prompt"] = image_prompt
+    #             participant = await self.ctx.wait_for_participant()
+    #             await self.ctx.room.local_participant.publish_data(image_url,
+    #                                                            reliable=True,
+    #                                                            destination_identities=[participant.identity],
+    #                                                            topic="topic1")
 
-    async def tts_node(self, text: AsyncIterable[str], model_settings: tts.ModelSettings):
-        logger.info("Before TTS callback triggered")
-
-        full_text = []
-        if isinstance(text, AsyncIterable):
-            async def stream():
-                async for chunk in text:
-                    full_text.append(chunk)
-                    yield chunk
-                final_text = ''.join(full_text)
-                logger.info(f"Final text: {final_text}")
-                asyncio.create_task(self.handle_imagegen_api(final_text, ""))
-            return Agent.default.tts_node(self, stream(), model_settings)
-        else:
-            asyncio.create_task(self.handle_imagegen_api(text, ""))
-            return Agent.default.tts_node(self, text, model_settings)
-
-    async def handle_imagegen_api(self, gm_text, last_turn_id):
-        try:
-            chat_history = await self.get_chat_history()
-            result = await send_to_imageGen_api(chat_history, last_turn_id, self.game_data)
-            image_url = result.get('image_url')
-            image_prompt = result.get('illustration_prompt')
-
-            if image_url:
-                self.ctx.proc.userdata["pic_url"] = image_url
-                self.ctx.proc.userdata["image_prompt"] = image_prompt
-                participant = await self.ctx.wait_for_participant()
-                await self.ctx.room.local_participant.publish_data(image_url,
-                                                               reliable=True,
-                                                               destination_identities=[participant.identity],
-                                                               topic="topic1")
-
-                if len(chat_history) > 2:
-                    user_text = chat_history[-1].content
-                    await save_next_turn_api(user_text, gm_text, str(self.game_data.game.id), image_url, image_prompt)
-        except Exception as e:
-            logger.error(f"ImageGen API error: {e}")
+    #             if len(chat_history) > 2:
+    #                 user_text = chat_history[-1].content
+    #                 await save_next_turn_api(user_text, gm_text, str(self.game_data.game.id), image_url, image_prompt)
+    #     except Exception as e:
+    #         logger.error(f"ImageGen API error: {e}")
 
 
 async def entrypoint(ctx: JobContext):
