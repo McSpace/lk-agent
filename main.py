@@ -100,8 +100,22 @@ async def get_game_data(game_id: str) -> Optional[GameData]:
 
 
 class Assistant(Agent):
-    def __init__(self, game_data: GameData, ctx: JobContext):
-        super().__init__()
+    def __init__(self, game_data: GameData, ctx: JobContext, user_lang: str):
+        super().__init__(
+            instructions=f"""
+        Ты ведущий текстовой ролевой игры.
+        Пользователь описывает свои действия, а ты описываешь реакцию мира.
+        Отвечай на '{user_lang}' языке.
+
+        Игровой мир:
+        {game_data.world_description if game_data else 'Средневековый мир с магией'}
+
+        Персонаж:
+        {game_data.character_description if game_data else 'Неизвестный герой'}
+
+        {f'Текущее состояние: {game_data.latest_summary.summary_text}' if game_data and game_data.latest_summary else ''}
+        """
+        )
         self.game_data = game_data
         self.ctx = ctx
         self.chat_ctx = llm.ChatContext()
@@ -145,26 +159,7 @@ async def entrypoint(ctx: JobContext):
             user_lang = "Dutch"
             user_lang_code = "nl"
 
-    initial_ctx = llm.ChatContext()
-    initial_ctx.add_message(
-        role="system",
-        content=f"""
-        Ты ведущий текстовой ролевой игры.
-        Пользователь описывает свои действия, а ты описываешь реакцию мира.
-        Отвечай на '{user_lang}' языке.
-
-        Игровой мир:
-        {game_data.world_description if game_data else 'Средневековый мир с магией'}
-
-        Персонаж:
-        {game_data.character_description if game_data else 'Неизвестный герой'}
-
-        {f'Текущее состояние: {game_data.latest_summary.summary_text}' if game_data and game_data.latest_summary else ''}
-        """
-    )
-
-    assistant = Assistant(game_data, ctx)
-    assistant.chat_ctx = initial_ctx
+    assistant = Assistant(game_data, ctx, user_lang)
 
     session = AgentSession(
         stt=deepgram.STT(language=user_lang_code),
