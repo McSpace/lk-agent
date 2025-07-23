@@ -21,7 +21,7 @@ async def agent_handler(ctx: JobContext):
     # Настройка компонентов агента
     vad = silero.VAD()
     stt = deepgram.STT()
-    llm = openai.LLM()
+    llm = openai.LLM(model="o4-mini")
     tts = elevenlabs.TTS()
     
     assistant = VoiceAssistant(vad, stt, llm, tts, allow_interruptions=True)

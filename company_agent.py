@@ -140,7 +140,7 @@ async def entrypoint(ctx: JobContext):
             language="ru"
         ),
         llm=openai.LLM(
-            model="gpt-4o-mini",
+            model="o4-mini",
         ),
         # tts=openai.TTS(),
         tts = tts,

@@ -191,6 +191,25 @@ async def entrypoint(ctx: JobContext):
     def on_track_subscribed(track, publication, participant):
         logger.info(f"Track subscribed: {track.sid} from participant {participant.identity}")
 
+    last_user_text = {"msg": None}
+
+    @session.on("user_speech_committed")
+    def on_user_speech_committed(msg: llm.ChatMessage):
+        logger.info(f"Player committed: {msg.content}")
+        last_user_text["msg"] = msg.content
+
+    @session.on("agent_speech_committed")
+    def on_agent_speech_committed(msg: llm.ChatMessage):
+        logger.info(f"GM committed: {msg.content}")
+        if last_user_text["msg"]:
+            logger.info(
+                "Trigger turn API with player_text='%s', gm_text='%s'",
+                last_user_text["msg"],
+                msg.content,
+            )
+        else:
+            logger.info("Skip turn API call because no player text was recorded")
+
     ctx.add_shutdown_callback(lambda: logger.info("Session ended."))
 
     logger.info("Starting agent session")
