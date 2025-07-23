@@ -96,7 +96,13 @@ async def save_next_turn_api(user_text: str, gm_text: str, game_id: str, image_u
 
 async def handle_imagegen_api(gm_text, last_turn_id, ctx, game_data, agent):
     try:
+        logger.info(
+            "handle_imagegen_api called, gm_text length=%d, messages=%d",
+            len(gm_text) if gm_text else 0,
+            len(agent.chat_ctx.messages),
+        )
         result = await send_to_imageGen_api(agent.chat_ctx.messages, last_turn_id, game_data)
+        logger.info("ImageGen API result: %s", result)
         image_url = result.get('image_url')
         image_prompt = result.get('illustration_prompt')
 
@@ -104,14 +110,30 @@ async def handle_imagegen_api(gm_text, last_turn_id, ctx, game_data, agent):
             ctx.proc.userdata["pic_url"] = image_url
             ctx.proc.userdata["image_prompt"] = image_prompt
             participant = await ctx.wait_for_participant()
-            await ctx.room.local_participant.publish_data(image_url,
-                                                           reliable=True,
-                                                           destination_identities=[participant.identity],
-                                                           topic="topic1")
+            await ctx.room.local_participant.publish_data(
+                image_url,
+                reliable=True,
+                destination_identities=[participant.identity],
+                topic="topic1",
+            )
 
             if len(agent.chat_ctx.messages) > 2:
                 user_text = agent.chat_ctx.messages[-1].content
-                await save_next_turn_api(user_text, gm_text, str(game_data.game.id), image_url, image_prompt)
+                await save_next_turn_api(
+                    user_text,
+                    gm_text,
+                    str(game_data.game.id),
+                    image_url,
+                    image_prompt,
+                )
+                logger.info("Turn saved to API")
+            else:
+                logger.info(
+                    "Not enough messages to save turn: %d",
+                    len(agent.chat_ctx.messages),
+                )
+        else:
+            logger.info("ImageGen API returned no image_url, skipping turn save")
     except Exception as e:
         logger.error(f"ImageGen API error: {e}")
 
@@ -159,7 +181,7 @@ async def entrypoint(ctx: JobContext):
     agent = VoiceAgent(
         stt=deepgram.STT(language=user_lang_code),
         tts=tts,
-        llm=openai.LLM(model="gpt-4.1-nano"),
+        llm=openai.LLM(model="o4-mini"),
         chat_ctx=initial_ctx,
     )
 
@@ -179,9 +201,17 @@ async def entrypoint(ctx: JobContext):
                     yield chunk
                 final_text = ''.join(full_text)
                 logger.info(f"Final text: {final_text}")
+                logger.info(
+                    "Triggering handle_imagegen_api with final_text length %d",
+                    len(final_text),
+                )
                 asyncio.create_task(handle_imagegen_api(final_text, "", ctx, game_data, agent))
             return stream()
         else:
+            logger.info(
+                "Triggering handle_imagegen_api with text length %d",
+                len(text) if text else 0,
+            )
             asyncio.create_task(handle_imagegen_api(text, "", ctx, game_data, agent))
             return text
 
@@ -191,18 +221,23 @@ async def entrypoint(ctx: JobContext):
     @agent.on("user_speech_committed")
     def on_user(msg: llm.ChatMessage):
         logger.info(f"User said: {msg.content}")
+        logger.info("Chat context length after user message: %d", len(agent.chat_ctx.messages))
 
     @agent.on("agent_speech_committed")
     def on_agent(msg: llm.ChatMessage):
         logger.info(f"Agent said: {msg.content}")
+        logger.info("Chat context length after agent message: %d", len(agent.chat_ctx.messages))
 
     ctx.add_shutdown_callback(lambda: logger.info("Session ended."))
 
+    logger.info("Starting voice agent")
     agent.start(ctx.room)
+    logger.info("Voice agent started")
 
     greeting = game_data.latest_summary.summary_text if game_data and game_data.latest_summary else (
         game_data.intro if game_data and game_data.intro else "Let's start!"
     )
+    logger.info("Initial greeting: %s", greeting)
     await agent.say(greeting, allow_interruptions=True)
 
 if __name__ == "__main__":
