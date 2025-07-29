@@ -45,6 +45,6 @@ COPY . .
 #RUN python main.py download-files
 
 # Run the application.
-ENTRYPOINT ["python", "simple_agent.py"]
+ENTRYPOINT ["python", "basic_agent.py"]
 # ENTRYPOINT ["python", "company_agent.py"]
 CMD ["start"]
