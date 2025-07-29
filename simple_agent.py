@@ -1,51 +1,55 @@
-import asyncio
 import logging
-from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, cli
-from livekit.agents.voice_assistant import VoiceAssistant
+from livekit.agents import (
+    Agent,
+    AgentSession, 
+    JobContext,
+    WorkerOptions,
+    cli
+)
 from livekit.plugins import deepgram, openai, silero
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("simple-agent")
 
-def prewarm(proc):
-    proc.userdata["vad"] = silero.VAD.load()
-
 async def entrypoint(ctx: JobContext):
     logger.info(f"🚀 Simple agent starting for room: {ctx.room.name}")
     
-    await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
+    await ctx.connect()
     logger.info(f"🔗 Connected to room: {ctx.room.name}")
 
-    # Простой голосовой ассистент
-    assistant = VoiceAssistant(
-        vad=ctx.proc.userdata["vad"],
-        stt=deepgram.STT(language="ru"),
-        llm=openai.LLM(model="gpt-4o-mini"),
-        tts=openai.TTS(),
+    # Создаем агента
+    agent = Agent(
+        instructions="Ты дружелюбный голосовой ассистент. Отвечай кратко на русском языке."
     )
 
-    # Ждем пользователя
-    logger.info("⏳ Waiting for participant...")
-    participant = await ctx.wait_for_participant()
-    logger.info(f"✅ Participant joined: {participant.identity}")
+    # Создаем сессию с компонентами
+    session = AgentSession(
+        vad=silero.VAD.load(),
+        stt=deepgram.STT(language="ru"),
+        llm=openai.LLM(model="gpt-4o-mini"),
+        tts=openai.TTS()
+    )
 
-    # Запускаем ассистента
-    assistant.start(ctx.room)
-    logger.info("🤖 Assistant started")
-
-    # Приветствие
-    await assistant.say("Привет! Я простой голосовой ассистент. Скажите что-нибудь!")
-
-    @assistant.on("user_speech_committed")
-    def on_user_speech(msg):
+    # Добавляем обработчики событий
+    @session.on("user_speech_committed")
+    def on_user_speech_committed(msg):
         logger.info(f"🎤 User said: {msg.content}")
 
-    @assistant.on("agent_speech_committed")
-    def on_agent_speech(msg):
+    @session.on("agent_speech_committed") 
+    def on_agent_speech_committed(msg):
         logger.info(f"🤖 Agent said: {msg.content}")
+
+    # Запускаем сессию
+    logger.info("🤖 Starting agent session...")
+    await session.start(agent=agent, room=ctx.room)
+    logger.info("✅ Agent session started")
+
+    # Отправляем приветствие
+    await session.generate_reply(
+        instructions="Поприветствуй пользователя и скажи что ты готов к разговору"
+    )
 
 if __name__ == "__main__":
     cli.run_app(WorkerOptions(
-        entrypoint_fnc=entrypoint,
-        prewarm_fnc=prewarm
+        entrypoint_fnc=entrypoint
     ))
