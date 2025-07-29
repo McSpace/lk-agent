@@ -42,9 +42,10 @@ RUN python -m pip install --user --no-cache-dir -r requirements.txt
 COPY . .
 
 # ensure that any dependent models are downloaded at build-time
-RUN python main.py download-files
+#RUN python main.py download-files
+RUN python simple_agent.py
 
 # Run the application.
-ENTRYPOINT ["python", "main.py"]
+ENTRYPOINT ["python", "simple_agent.py"]
 # ENTRYPOINT ["python", "company_agent.py"]
 CMD ["start"]
