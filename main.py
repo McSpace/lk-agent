@@ -144,7 +144,11 @@ class Assistant(Agent):
 
 
 async def entrypoint(ctx: JobContext):
+    logger.info(f"🚀 Agent starting - Room: {ctx.room.name if ctx.room else 'None'}")
+    
     await ctx.connect()
+    logger.info(f"🔗 Connected to room: {ctx.room.name}")
+    logger.info(f"🎯 Room participants: {len(ctx.room.remote_participants)}")
 
     game_id = ctx.room.name
     game_data = await get_game_data(game_id)
@@ -187,11 +191,13 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("participant_connected")
     def on_participant_connected(participant):
-        logger.info(f"Participant connected: {participant.identity}")
+        logger.info(f"👤 Participant connected: {participant.identity}")
+        logger.info(f"📊 Total participants now: {len(ctx.room.remote_participants) + 1}")
 
     @session.on("track_subscribed")
     def on_track_subscribed(track, publication, participant):
-        logger.info(f"Track subscribed: {track.sid} from participant {participant.identity}")
+        logger.info(f"🎵 Track subscribed: {track.sid} from participant {participant.identity}")
+        logger.info(f"🎵 Track kind: {track.kind}, source: {track.source}")
 
     @session.on("user_speech_committed")
     def on_user_speech_committed(user_msg):
