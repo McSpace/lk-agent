@@ -191,9 +191,28 @@ async def entrypoint(ctx: JobContext):
     def on_track_subscribed(track, publication, participant):
         logger.info(f"Track subscribed: {track.sid} from participant {participant.identity}")
 
+    @session.on("user_speech_committed")
+    def on_user_speech_committed(user_msg):
+        logger.info(f"🎤 User speech committed: {user_msg.content}")
+
+    @session.on("agent_speech_committed") 
+    def on_agent_speech_committed(agent_msg):
+        logger.info(f"🤖 Agent speech committed: {agent_msg.content}")
+
+    @session.on("user_started_speaking")
+    def on_user_started_speaking():
+        logger.info("🗣️ User started speaking")
+
+    @session.on("user_stopped_speaking")
+    def on_user_stopped_speaking():
+        logger.info("🤫 User stopped speaking")
+
     ctx.add_shutdown_callback(lambda: logger.info("Session ended."))
 
-    logger.info("Starting agent session")
+    logger.info(f"Starting agent session with language: {user_lang} ({user_lang_code})")
+    logger.info(f"STT language: {user_lang_code}")
+    logger.info(f"TTS settings: speed={0.5 if user_lang_code == 'ru' else (0.8 if user_lang_code == 'nl' else 1)}")
+    
     await session.start(
         room=ctx.room,
         agent=assistant,
