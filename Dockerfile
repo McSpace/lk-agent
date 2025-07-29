@@ -43,7 +43,6 @@ COPY . .
 
 # ensure that any dependent models are downloaded at build-time
 #RUN python main.py download-files
-RUN python simple_agent.py
 
 # Run the application.
 ENTRYPOINT ["python", "simple_agent.py"]
