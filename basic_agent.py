@@ -17,26 +17,40 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"✅ Participant joined: {participant.identity}")
 
     # Отправляем простое сообщение через data channel
-    greeting = "Привет! Агент подключен успешно. Если вы это видите в логах - соединение работает!"
+    greeting = "Привет! Агент подключен успешно. Напишите что-нибудь для тестирования эхо!"
     
-    await ctx.room.local_participant.publish_data(
-        greeting.encode('utf-8'), 
-        reliable=True,
-        topic="greeting"
-    )
-    logger.info(f"📨 Sent greeting message: {greeting}")
+    try:
+        await ctx.room.local_participant.publish_data(
+            greeting.encode('utf-8'), 
+            reliable=True,
+            topic="greeting"
+        )
+        logger.info(f"✅ Sent greeting message: {greeting}")
+    except Exception as e:
+        logger.error(f"❌ Failed to send greeting: {e}")
 
     # Слушаем сообщения от пользователя
     @ctx.room.on("data_received")
     def on_data_received(data: rtc.DataPacket):
         logger.info(f"📨 Received data: {data.data.decode('utf-8')}")
-        # Эхо ответ
-        echo_msg = f"Получил: {data.data.decode('utf-8')}"
-        ctx.room.local_participant.publish_data(
-            echo_msg.encode('utf-8'),
-            reliable=True,
-            topic="echo"
-        )
+        
+        # Эхо ответ (создаем task для async операции)
+        import asyncio
+        
+        async def send_echo():
+            try:
+                echo_msg = f"Получил: {data.data.decode('utf-8')}"
+                await ctx.room.local_participant.publish_data(
+                    echo_msg.encode('utf-8'),
+                    reliable=True,
+                    topic="echo"
+                )
+                logger.info(f"✅ Sent echo: {echo_msg}")
+            except Exception as e:
+                logger.error(f"❌ Failed to send echo: {e}")
+        
+        # Запускаем как задачу
+        asyncio.create_task(send_echo())
 
     # Логируем события участников
     @ctx.room.on("participant_connected")
