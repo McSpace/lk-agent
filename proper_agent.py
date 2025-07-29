@@ -74,7 +74,7 @@ async def entrypoint(ctx: JobContext):
     # Создаем сессию с голосовыми компонентами
     session = AgentSession(
         vad=ctx.proc.userdata["vad"],
-        stt=deepgram.STT(language="ru"),
+        stt=deepgram.STT(language="ru-RU"),
         llm=openai.LLM(model="gpt-4o-mini"),
         tts=openai.TTS(),
         turn_detection=MultilingualModel(),
