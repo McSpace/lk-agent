@@ -241,8 +241,12 @@ async def entrypoint(ctx: JobContext):
     greeting = game_data.latest_summary.summary_text if game_data and game_data.latest_summary else (
         game_data.intro if game_data and game_data.intro else "Добро пожаловать в игру! Опишите ваши действия."
     )
-    logger.info(f"📢 Sending greeting: {greeting}")
-    await session.generate_reply(instructions=greeting)
+    logger.info(f"📢 Sending greeting: {greeting[:100]}...")  # Сократим лог
+    try:
+        await session.generate_reply(instructions=greeting)
+        logger.info("✅ Greeting sent successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to send greeting: {e}")
 
 
 if __name__ == "__main__":
