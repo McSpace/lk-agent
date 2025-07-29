@@ -149,6 +149,12 @@ async def entrypoint(ctx: JobContext):
     await ctx.connect()
     logger.info(f"🔗 Connected to room: {ctx.room.name}")
     logger.info(f"🎯 Room participants: {len(ctx.room.remote_participants)}")
+    
+    # Логируем существующих участников
+    for participant in ctx.room.remote_participants.values():
+        logger.info(f"👤 Existing participant: {participant.identity}")
+        for track_pub in participant.track_publications.values():
+            logger.info(f"🎵 Existing track: {track_pub.sid} ({track_pub.source})")
 
     game_id = ctx.room.name
     game_data = await get_game_data(game_id)
@@ -240,6 +246,12 @@ async def entrypoint(ctx: JobContext):
             agent=assistant,
         )
         logger.info("Agent session started successfully")
+        
+        # Ждем подключения пользователя
+        logger.info("⏳ Waiting for participant to join...")
+        participant = await ctx.wait_for_participant()
+        logger.info(f"✅ Participant joined: {participant.identity}")
+        
     except Exception as e:
         logger.error(f"Failed to start agent session: {e}")
         return
