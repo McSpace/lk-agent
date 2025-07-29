@@ -171,7 +171,11 @@ async def entrypoint(ctx: JobContext):
             ),
             language=user_lang_code
         ),
-        vad=silero.VAD.load(),
+        vad=silero.VAD.load(
+            min_speech_duration=0.1,  # Минимальная длительность речи (сек)
+            min_silence_duration=0.2,  # Минимальная длительность тишины (сек)
+            threshold=0.3,             # Порог чувствительности (0.0-1.0)
+        ),
         turn_detection=MultilingualModel(),
     )
 
@@ -207,6 +211,18 @@ async def entrypoint(ctx: JobContext):
     def on_user_stopped_speaking():
         logger.info("🤫 User stopped speaking")
 
+    @session.on("vad_state_changed")
+    def on_vad_state_changed(ev):
+        logger.info(f"🎙️ VAD state changed: {ev}")
+
+    @session.on("stt_started")
+    def on_stt_started():
+        logger.info("📝 STT started processing")
+
+    @session.on("stt_finished")
+    def on_stt_finished():
+        logger.info("📝 STT finished processing")
+
     ctx.add_shutdown_callback(lambda: logger.info("Session ended."))
 
     logger.info(f"Starting agent session with language: {user_lang} ({user_lang_code})")
@@ -220,8 +236,9 @@ async def entrypoint(ctx: JobContext):
     logger.info("Agent session started")
 
     greeting = game_data.latest_summary.summary_text if game_data and game_data.latest_summary else (
-        game_data.intro if game_data and game_data.intro else "Let's start!"
+        game_data.intro if game_data and game_data.intro else "Добро пожаловать в игру! Опишите ваши действия."
     )
+    logger.info(f"📢 Sending greeting: {greeting}")
     await session.generate_reply(instructions=greeting)
 
 
