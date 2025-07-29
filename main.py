@@ -161,23 +161,21 @@ async def entrypoint(ctx: JobContext):
 
     assistant = Assistant(game_data, ctx, user_lang)
 
-    session = AgentSession(
-        stt=deepgram.STT(language=user_lang_code),
-        llm=openai.LLM(model="o4-mini"),
-        tts=cartesia.TTS(
-            speed=0.5 if user_lang_code == "ru" else (0.8 if user_lang_code == "nl" else 1),
-            voice="da05e96d-ca10-4220-9042-d8acef654fa9" if user_lang_code == "ru" else (
-                "9e8db62d-056f-47f3-b3b6-1b05767f9176" if user_lang_code == "nl" else "da05e96d-ca10-4220-9042-d8acef654fa9"
+    try:
+        session = AgentSession(
+            stt=deepgram.STT(language=user_lang_code),
+            llm=openai.LLM(model="gpt-4o-mini"),  # Используем более стабильную модель
+            tts=cartesia.TTS(
+                speed=0.5 if user_lang_code == "ru" else 1.0,
+                voice="da05e96d-ca10-4220-9042-d8acef654fa9",
+                language=user_lang_code
             ),
-            language=user_lang_code
-        ),
-        vad=silero.VAD.load(
-            min_speech_duration=0.1,  # Минимальная длительность речи (сек)
-            min_silence_duration=0.2,  # Минимальная длительность тишины (сек)
-            threshold=0.3,             # Порог чувствительности (0.0-1.0)
-        ),
-        turn_detection=MultilingualModel(),
-    )
+            vad=silero.VAD.load(),
+        )
+        logger.info("AgentSession created successfully")
+    except Exception as e:
+        logger.error(f"Failed to create AgentSession: {e}")
+        return
 
     @session.on("user_state_changed")
     def on_user_state_changed(ev):
@@ -211,29 +209,34 @@ async def entrypoint(ctx: JobContext):
     def on_user_stopped_speaking():
         logger.info("🤫 User stopped speaking")
 
-    @session.on("vad_state_changed")
-    def on_vad_state_changed(ev):
-        logger.info(f"🎙️ VAD state changed: {ev}")
+    # Убираем потенциально проблемные обработчики событий
+    # @session.on("vad_state_changed")
+    # def on_vad_state_changed(ev):
+    #     logger.info(f"🎙️ VAD state changed: {ev}")
 
-    @session.on("stt_started")
-    def on_stt_started():
-        logger.info("📝 STT started processing")
+    # @session.on("stt_started") 
+    # def on_stt_started():
+    #     logger.info("📝 STT started processing")
 
-    @session.on("stt_finished")
-    def on_stt_finished():
-        logger.info("📝 STT finished processing")
+    # @session.on("stt_finished")
+    # def on_stt_finished():
+    #     logger.info("📝 STT finished processing")
 
     ctx.add_shutdown_callback(lambda: logger.info("Session ended."))
 
     logger.info(f"Starting agent session with language: {user_lang} ({user_lang_code})")
     logger.info(f"STT language: {user_lang_code}")
-    logger.info(f"TTS settings: speed={0.5 if user_lang_code == 'ru' else (0.8 if user_lang_code == 'nl' else 1)}")
+    logger.info(f"TTS settings: speed={0.5 if user_lang_code == 'ru' else 1.0}")
     
-    await session.start(
-        room=ctx.room,
-        agent=assistant,
-    )
-    logger.info("Agent session started")
+    try:
+        await session.start(
+            room=ctx.room,
+            agent=assistant,
+        )
+        logger.info("Agent session started successfully")
+    except Exception as e:
+        logger.error(f"Failed to start agent session: {e}")
+        return
 
     greeting = game_data.latest_summary.summary_text if game_data and game_data.latest_summary else (
         game_data.intro if game_data and game_data.intro else "Добро пожаловать в игру! Опишите ваши действия."
