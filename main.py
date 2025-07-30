@@ -76,13 +76,13 @@ async def get_game_data(game_id: str) -> Optional[GameData]:
         logger.error(f"Error fetching game data: {e}")
         return None
 
-async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
+async def send_to_imageGen_api(message_data, turn_id, game_data: GameData):
     """Асинхронная генерация картинки для игровой сцены"""
     try:
         async with aiohttp.ClientSession() as session:
             payload = {
                 "pic_id": turn_id,
-                "chat_history": messages[-1],
+                "chat_history": message_data, # Теперь передаем сериализуемые данные
                 "illustration_style": game_data.image_style_prompt,
                 "main_character": game_data.character_appearance
             }
@@ -330,15 +330,16 @@ class Assistant(Agent):
     async def handle_imagegen_api(self, gm_text, last_turn_id):
         """Фоновая обработка генерации и отправки картинки"""
         try:
-            # Используем сохраненный контекст чата или создаем заглушку
-            if hasattr(self, 'current_turn_ctx') and self.current_turn_ctx:
-                chat_history = getattr(self.current_turn_ctx, 'items', [])
-            else:
-                # Создаем минимальную историю для API
-                chat_history = [{"content": gm_text}]
+            # Конвертируем сообщение в правильный формат для API
+            if isinstance(gm_text, list):
+                gm_text = gm_text[0] if len(gm_text) > 0 else ""
+            gm_text = str(gm_text)
+            
+            # Создаем простую структуру для API (не объект ChatMessage)
+            chat_history_for_api = {"content": gm_text}
             
             # Генерируем картинку асинхронно
-            result = await send_to_imageGen_api(chat_history, last_turn_id, self.game_data)
+            result = await send_to_imageGen_api(chat_history_for_api, last_turn_id, self.game_data)
             
             if result:
                 image_url = result.get('image_url')
@@ -357,9 +358,9 @@ class Assistant(Agent):
                     )
                     logger.info(f"🖼️ Image sent to frontend: {image_url}")
 
-                    # Сохраняем ход с картинкой если есть история
-                    if len(chat_history) > 2:
-                        user_text = chat_history[-2].content if len(chat_history) >= 2 else ""
+                    # Сохраняем ход с картинкой - используем сохраненные данные пользователя  
+                    if hasattr(self, 'last_user_message'):
+                        user_text = self.last_user_message
                         await save_next_turn_api(user_text, gm_text, str(self.game_data.game.id), image_url, image_prompt)
                         
         except Exception as e:
