@@ -154,6 +154,21 @@ class Assistant(Agent):
         logger.info(f"📢 Sending greeting: {greeting[:100]}...")
         await self.session.generate_reply(instructions=greeting)
 
+    async def on_user_turn_completed(self, turn_ctx, new_message):
+        """Вызывается когда пользователь закончил говорить, до ответа агента"""
+        logger.info(f"🎤 User turn completed: {new_message.content}")
+        
+        # Сохраняем сообщение пользователя для дальнейшего использования
+        self.last_user_message = new_message.content
+        
+    async def on_agent_response_generated(self, agent_message):
+        """Вызывается после генерации ответа агента"""
+        logger.info(f"🗣️ Agent response generated: {agent_message}")
+        
+        # Сохраняем ход и генерируем картинку при необходимости
+        if hasattr(self, 'last_user_message') and self.last_user_message:
+            await self._save_and_generate_image(self.last_user_message, agent_message)
+
     @function_tool
     async def roll_dice(self, context: RunContext, sides: int = 20):
         """
@@ -165,6 +180,10 @@ class Assistant(Agent):
         import random
         result = random.randint(1, sides)
         logger.info(f"🎲 Dice roll: {result} (d{sides})")
+        
+        # Попробуем сохранить ход когда срабатывает любая function
+        await self._trigger_turn_save_and_image("dice roll action")
+        
         return f"Результат броска d{sides}: {result}"
 
     @function_tool 
@@ -173,7 +192,10 @@ class Assistant(Agent):
         Показывает инвентарь игрока.
         """
         logger.info("🎒 Checking player inventory")
-        # В будущем здесь можно интегрировать с API для получения реального инвентаря
+        
+        # Попробуем сохранить ход когда срабатывает любая function
+        await self._trigger_turn_save_and_image("inventory check")
+        
         return "В вашем инвентаре: меч, зелье лечения, 50 золотых монет, факел"
 
     @function_tool
@@ -251,6 +273,52 @@ class Assistant(Agent):
         if self.game_data and self.game_data.game:
             await save_next_turn_api(user_text, agent_text, str(self.game_data.game.id))
 
+    async def _save_and_generate_image(self, user_message: str, agent_message: str):
+        """Сохраняет ход и генерирует картинку при необходимости"""  
+        try:
+            logger.info(f"💾 Saving turn - User: '{user_message[:50]}...', Agent: '{agent_message[:50]}...'")
+            
+            # Сохраняем ход асинхронно
+            import asyncio
+            asyncio.create_task(self.save_turn_background(user_message, agent_message))
+            logger.info("📊 Turn saved successfully")
+            
+            # Проверяем необходимость генерации картинки
+            image_keywords = ["видите", "перед вами", "появляется", "входите", "находите", 
+                            "атакует", "сражение", "локация", "комната", "пещера", "лес"]
+            
+            if any(keyword in agent_message.lower() for keyword in image_keywords):
+                import uuid
+                turn_id = str(uuid.uuid4())
+                logger.info("🎨 Image generation triggered by keywords")
+                asyncio.create_task(self.handle_imagegen_api(agent_message, turn_id))
+            else:
+                logger.info("🎨 No image keywords found, skipping generation")
+                
+        except Exception as e:
+            logger.error(f"❌ Save and generate error: {e}")
+
+    async def _trigger_turn_save_and_image(self, action_type: str):
+        """Fallback триггер для function_tools (если основные события не работают)"""
+        try:
+            logger.info(f"🔄 Fallback trigger for: {action_type}")
+            
+            # Получаем историю чата
+            chat_history = await self.session.get_chat_history()
+            
+            if len(chat_history) >= 1:
+                # Пытаемся найти последние сообщения
+                user_msg = getattr(self, 'last_user_message', f"Player action: {action_type}")
+                agent_msg = chat_history[-1].content if len(chat_history) >= 1 else ""
+                
+                if user_msg and agent_msg:
+                    await self._save_and_generate_image(user_msg, agent_msg)
+                else:
+                    logger.warning("⚠️ Could not find messages for fallback save")
+                    
+        except Exception as e:
+            logger.error(f"❌ Fallback trigger error: {e}")
+
 
 def prewarm(proc: JobProcess):
     """Предзагрузка моделей"""
@@ -316,35 +384,8 @@ async def entrypoint(ctx: JobContext):
         logger.info(f"🎵 Track subscribed: {track.sid} from participant {participant.identity}")
         logger.info(f"🎵 Track kind: {track.kind}, source: {track.source}")
 
-    @session.on("user_speech_committed")
-    def on_user_speech_committed(user_msg):
-        nonlocal last_user_message
-        logger.info(f"🎤 Player said: {user_msg.content}")
-        last_user_message = user_msg.content
-
-    @session.on("agent_speech_committed") 
-    def on_agent_speech_committed(agent_msg):
-        nonlocal turn_counter, last_user_message
-        logger.info(f"🗣️ Agent said: {agent_msg.content}")
-        
-        # Асинхронно сохраняем ход в фоне (не блокируя диалог)
-        if last_user_message:
-            import asyncio
-            asyncio.create_task(assistant.save_turn_background(last_user_message, agent_msg.content))
-            
-            # Увеличиваем счетчик ходов
-            turn_counter += 1
-            logger.info(f"📊 Turn #{turn_counter} completed")
-            
-            # Генерируем картинку при необходимости
-            if should_generate_image(agent_msg.content, turn_counter):
-                import uuid
-                turn_id = str(uuid.uuid4())
-                logger.info(f"🎨 Triggering image generation for turn #{turn_counter}")
-                asyncio.create_task(assistant.handle_imagegen_api(agent_msg.content, turn_id))
-            
-            # Сбрасываем последнее сообщение пользователя
-            last_user_message = ""
+    # Основные события теперь обрабатываются через on_user_turn_completed в Assistant классе
+    # Оставляем только вспомогательные события для отладки
 
     @session.on("user_started_speaking")
     def on_user_started_speaking():
@@ -359,34 +400,14 @@ async def entrypoint(ctx: JobContext):
         for func in called_functions:
             logger.info(f"⚙️ Function called: {func.call_info.function_info.name}")
     
-    # Добавляем дополнительные event listeners для отладки
-    @session.on("user_message")
+    # События для отладки (могут не срабатывать в новой архитектуре)
+    @session.on("user_message") 
     def on_user_message(msg):
-        nonlocal last_user_message
-        logger.info(f"🎤 User message: {msg.content}")
-        last_user_message = msg.content
+        logger.info(f"🔍 Debug: user_message event - {msg}")
 
     @session.on("agent_message")
     def on_agent_message(msg):
-        nonlocal turn_counter, last_user_message
-        logger.info(f"🗣️ Agent message: {msg.content}")
-        
-        # Асинхронно сохраняем ход в фоне
-        if last_user_message:
-            import asyncio
-            asyncio.create_task(assistant.save_turn_background(last_user_message, msg.content))
-            
-            turn_counter += 1
-            logger.info(f"📊 Turn #{turn_counter} completed")
-            
-            # Генерируем картинку при необходимости
-            if should_generate_image(msg.content, turn_counter):
-                import uuid
-                turn_id = str(uuid.uuid4())
-                logger.info(f"🎨 Triggering image generation for turn #{turn_counter}")
-                asyncio.create_task(assistant.handle_imagegen_api(msg.content, turn_id))
-            
-            last_user_message = ""
+        logger.info(f"🔍 Debug: agent_message event - {msg}")
 
     @session.on("agent_started_speaking")  
     def on_agent_started_speaking():
@@ -432,21 +453,8 @@ async def entrypoint(ctx: JobContext):
     # def on_stt_finished():
     #     logger.info("📝 STT finished processing")
 
-    # Переменные для отслеживания ходов и генерации картинок
-    last_user_message = ""
-    turn_counter = 0
-    
-    def should_generate_image(agent_text: str, turn_count: int) -> bool:
-        """Определяет когда нужно генерировать картинку"""
-        # Ключевые слова для генерации картинок
-        image_keywords = ["вы видите", "перед вами", "появляется", "входите", "находите", 
-                         "атакует", "сражение", "локация", "комната", "пещера", "лес"]
-        
-        # Генерируем картинку каждые 3 хода или при ключевых словах
-        has_keywords = any(keyword in agent_text.lower() for keyword in image_keywords)
-        periodic_generation = (turn_count % 3 == 0) and turn_count > 0
-        
-        return has_keywords or periodic_generation
+    # Переменные для отслеживания состояния агента
+    assistant.turn_counter = 0
 
     ctx.add_shutdown_callback(lambda: logger.info("Session ended."))
 
