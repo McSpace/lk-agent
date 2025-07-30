@@ -9,9 +9,6 @@ This is a LiveKit agents collection for real-time voice and audio processing app
 ## Development Commands
 
 - `python main.py start` - Start the main RPG game agent
-- `python company_agent.py` - Start the corporate assistant agent  
-- `python agent2.py` - Start the speech-to-text demo agent
-- `python multy_agent.py` - Start the multi-agent STT system
 - `python main.py download-files` - Download required model files (used in Docker build)
 - `pip install -r requirements.txt` - Install dependencies
 
@@ -40,22 +37,6 @@ This is a LiveKit agents collection for real-time voice and audio processing app
 - **API Integration**: Connects to `STORY_API_URL` for game data retrieval
 - **Key Classes**: `GameData`, `Game`, `GameSummary`, `Assistant`
 
-#### 2. Company Agent (`company_agent.py`)
-- **Purpose**: Corporate assistant for employee support
-- **Features**:
-  - Wake-word activation ("бустер")
-  - Russian language support
-  - Text accumulation and processing
-  - Session management with callbacks
-- **Activation**: Only responds when user says "бустер" (booster)
-
-#### 3. Speech-to-Text Agents (`agent2.py`, `multy_agent.py`)
-- **Purpose**: Real-time transcription demos
-- **Features**:
-  - Audio stream processing
-  - Transcription forwarding to clients
-  - Multi-language STT support
-- **Output**: Console logging of transcribed text
 
 ### Core LiveKit Integration
 

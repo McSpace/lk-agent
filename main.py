@@ -210,25 +210,44 @@ class Assistant(Agent):
         """Задержанное сохранение хода после генерации ответа агента"""
         try:
             # Ждем немного чтобы агент сгенерировал ответ
-            await asyncio.sleep(2)
+            await asyncio.sleep(3)
             
             # Используем сохраненный контекст чата
             if hasattr(self, 'current_turn_ctx') and self.current_turn_ctx:
                 # В turn_ctx история сообщений хранится в items
                 messages = getattr(self.current_turn_ctx, 'items', [])
                 
-                if len(messages) >= 1:
-                    # Берем последние сообщения пользователя и агента
+                if len(messages) >= 2:
+                    # Ищем последнее пользовательское и агентское сообщение
                     user_msg = getattr(self, 'last_user_message', '')
-                    # Последнее сообщение должно быть от агента
-                    agent_msg = messages[-1].content if messages and hasattr(messages[-1], 'content') else ''
+                    
+                    # Ищем последнее сообщение от агента (не система)
+                    agent_msg = ""
+                    for msg in reversed(messages):
+                        if hasattr(msg, 'role') and msg.role == 'assistant':
+                            agent_msg = msg.content
+                            break
+                    
+                    # Если не нашли по роли, берем последнее сообщение (не системное)
+                    if not agent_msg and len(messages) >= 2:
+                        last_msg = messages[-1]
+                        if hasattr(last_msg, 'role') and last_msg.role != 'system':
+                            agent_msg = last_msg.content
+                    
+                    # Исправляем формат - если это массив, берем первый элемент
+                    if isinstance(agent_msg, list):
+                        agent_msg = agent_msg[0] if len(agent_msg) > 0 else ""
                     
                     if user_msg and agent_msg:
-                        logger.info(f"💾 Context-based turn save - User: '{user_msg[:50]}...', Agent: '{agent_msg[:50]}...'")
+                        logger.info(f"💾 Context-based turn save - User: '{user_msg[:50]}...', Agent: '{str(agent_msg)[:50]}...'")
                         await self._save_and_generate_image(user_msg, agent_msg)
                     else:
                         logger.warning(f"⚠️ Missing messages - user: {bool(user_msg)}, agent: {bool(agent_msg)}")
                         logger.info(f"📝 Available messages: {len(messages)}")
+                        # Логируем все сообщения для отладки
+                        for i, msg in enumerate(messages):
+                            logger.info(f"📝 Message {i}: role={getattr(msg, 'role', 'unknown')}, content={str(getattr(msg, 'content', ''))[:100]}...")
+                        
                         # Попробуем просто с пользовательским сообщением
                         if user_msg:
                             await self._save_and_generate_image(user_msg, "Agent response processing...")
@@ -372,6 +391,16 @@ class Assistant(Agent):
     async def _save_and_generate_image(self, user_message: str, agent_message: str):
         """Сохраняет ход и генерирует картинку при необходимости"""  
         try:
+            # Исправляем формат сообщений - конвертируем массивы в строки
+            if isinstance(agent_message, list):
+                agent_message = agent_message[0] if len(agent_message) > 0 else ""
+            if isinstance(user_message, list):
+                user_message = user_message[0] if len(user_message) > 0 else ""
+                
+            # Убеждаемся что это строки
+            agent_message = str(agent_message)
+            user_message = str(user_message)
+            
             logger.info(f"💾 Saving turn - User: '{user_message[:50]}...', Agent: '{agent_message[:50]}...'")
             
             # Сохраняем ход асинхронно
