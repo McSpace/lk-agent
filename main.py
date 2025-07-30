@@ -350,13 +350,21 @@ class Assistant(Agent):
                     self.ctx.proc.userdata["pic_url"] = image_url
                     self.ctx.proc.userdata["image_prompt"] = image_prompt
                     
+                    # Проверяем, есть ли участники в комнате перед отправкой
+                    participants_count = len(self.ctx.room.remote_participants)
+                    logger.info(f"🔍 Room has {participants_count} remote participants")
+                    
                     # Отправляем картинку на фронтенд через DataChannel
-                    await self.ctx.room.local_participant.publish_data(
-                        image_url.encode('utf-8'),
-                        reliable=True,
-                        topic="topic1"  # Фронтенд слушает этот topic
-                    )
-                    logger.info(f"🖼️ Image sent to frontend: {image_url}")
+                    try:
+                        await self.ctx.room.local_participant.publish_data(
+                            image_url.encode('utf-8'),
+                            reliable=True,
+                            topic="topic1"  # Фронтенд слушает этот topic
+                        )
+                        logger.info(f"🖼️ Image sent to frontend via DataChannel: {image_url}")
+                        logger.info(f"📡 DataChannel message size: {len(image_url.encode('utf-8'))} bytes")
+                    except Exception as e:
+                        logger.error(f"❌ Failed to send image via DataChannel: {e}")
         except Exception as e:
             logger.error(f"❌ ImageGen API error: {e}")
         
