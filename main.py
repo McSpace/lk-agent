@@ -80,19 +80,25 @@ async def send_to_imageGen_api(message_data, turn_id, game_data: GameData):
     """Асинхронная генерация картинки для игровой сцены"""
     try:
         async with aiohttp.ClientSession() as session:
+            # Исправляем формат для соответствия API схеме
             payload = {
-                "pic_id": turn_id,
-                "chat_history": message_data, # Теперь передаем сериализуемые данные
+                "chat_history": message_data.get("content", "") if isinstance(message_data, dict) else str(message_data),
                 "illustration_style": game_data.image_style_prompt,
-                "main_character": game_data.character_appearance
+                "main_character": game_data.character_appearance,
+                "file_name": turn_id  # Используем turn_id как file_name
             }
             logger.info("🎨 Sending image generation payload: %s", payload)
             async with session.post("https://storyimagegen-production.up.railway.app/process_chat",
                                     timeout=60,
                                     json=payload) as response:
-                result = await response.json()
-                logger.info("✅ Image generation completed")
-                return result
+                if response.status == 200:
+                    result = await response.json()
+                    logger.info("✅ Image generation completed")
+                    return result
+                else:
+                    error_text = await response.text()
+                    logger.error(f"❌ Image generation failed with status {response.status}: {error_text}")
+                    return None
     except Exception as e:
         logger.error(f"❌ Image generation failed: {e}")
         return None
