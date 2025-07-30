@@ -455,8 +455,11 @@ async def entrypoint(ctx: JobContext):
             tts=openai.TTS(),
             vad=ctx.proc.userdata["vad"],
             turn_detection=MultilingualModel(),
+            min_endpointing_delay=1.2,  # Увеличено с 0.4 до 1.2 сек для предотвращения разбиения сообщений
+            max_endpointing_delay=8.0,  # Увеличено с 6.0 до 8.0 сек
+            preemptive_synthesis=False  # Отключаем преждевременный синтез для избежания частичных транскрипций
         )
-        logger.info("AgentSession created successfully")
+        logger.info("AgentSession created with turn detection config: min_delay=1.2s, max_delay=8.0s, preemptive_synthesis=False")
     except Exception as e:
         logger.error(f"Failed to create AgentSession: {e}")
         return
