@@ -160,11 +160,29 @@ class Assistant(Agent):
         """Вызывается когда пользователь закончил говорить, до ответа агента"""
         logger.info(f"🎤 User turn completed: {new_message.content}")
         
+        # Диагностика контекста
+        logger.info(f"🔍 turn_ctx type: {type(turn_ctx)}")
+        logger.info(f"🔍 turn_ctx attributes: {dir(turn_ctx)}")
+        
+        # Пробуем разные способы получения сообщений
+        messages = getattr(turn_ctx, 'messages', None)
+        logger.info(f"🔍 turn_ctx.messages: {messages} (len: {len(messages) if messages else 'None'})")
+        
+        # Пробуем другие атрибуты
+        for attr in ['history', 'chat_history', 'conversation', 'msgs']:
+            if hasattr(turn_ctx, attr):
+                value = getattr(turn_ctx, attr)
+                logger.info(f"🔍 turn_ctx.{attr}: {type(value)} (len: {len(value) if hasattr(value, '__len__') else 'no len'})")
+        
         # Сохраняем контекст и сообщение для дальнейшего использования
         self.last_user_message = new_message.content
         self.current_turn_ctx = turn_ctx
         
-        # Добавляем асинхронную задачу для сохранения хода ПОСЛЕ ответа агента
+        # Пробуем простое сохранение без задержки (сразу)
+        logger.info("💾 Attempting immediate turn save...")
+        await self._immediate_turn_save()
+        
+        # Также добавляем задержанное сохранение как backup
         import asyncio
         asyncio.create_task(self._delayed_turn_save_with_context())
         
@@ -202,6 +220,19 @@ class Assistant(Agent):
         except Exception as e:
             logger.error(f"❌ Delayed turn save error: {e}")
             
+    async def _immediate_turn_save(self):
+        """Немедленное сохранение только с пользовательским сообщением"""
+        try:
+            user_msg = getattr(self, 'last_user_message', '')
+            if user_msg:
+                # Сохраняем ход только с пользовательским сообщением, агентский ответ добавим позже
+                logger.info(f"💾 Immediate save - User: '{user_msg[:50]}...', Agent: 'Processing...'")
+                await self._save_and_generate_image(user_msg, "Agent is thinking...")
+            else:
+                logger.warning("⚠️ No user message for immediate save")
+        except Exception as e:
+            logger.error(f"❌ Immediate turn save error: {e}")
+
     # Fallback метод для сохранения без контекста
     async def _delayed_turn_save(self):
         """Старый метод - оставляем как fallback"""
