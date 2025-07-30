@@ -202,15 +202,18 @@ class Assistant(Agent):
         # logger.info("💾 Attempting immediate turn save...")
         # await self._immediate_turn_save()
         
-        # Только задержанное сохранение с полным ответом агента
-        import asyncio
-        asyncio.create_task(self._delayed_turn_save_with_context())
+        # Только одно задержанное сохранение с полным ответом агента
+        # Предотвращаем множественные вызовы с помощью флага
+        if not hasattr(self, '_save_in_progress') or not self._save_in_progress:
+            self._save_in_progress = True
+            import asyncio
+            asyncio.create_task(self._delayed_turn_save_with_context())
         
     async def _delayed_turn_save_with_context(self):
         """Задержанное сохранение хода после генерации ответа агента"""
         try:
-            # Ждем немного чтобы агент сгенерировал ответ
-            await asyncio.sleep(3)
+            # Ждем больше времени чтобы агент сгенерировал и добавил ответ в контекст
+            await asyncio.sleep(5)
             
             # Используем сохраненный контекст чата
             if hasattr(self, 'current_turn_ctx') and self.current_turn_ctx:
@@ -221,14 +224,20 @@ class Assistant(Agent):
                     # Ищем последнее пользовательское и агентское сообщение
                     user_msg = getattr(self, 'last_user_message', '')
                     
-                    # Ищем последнее сообщение от агента (не система)
+                    # Ищем самое свежее сообщение от агента (не старое приветствие)
                     agent_msg = ""
+                    # Ищем последнее assistant сообщение, которое НЕ является приветствием
                     for msg in reversed(messages):
                         if hasattr(msg, 'role') and msg.role == 'assistant':
-                            agent_msg = msg.content
-                            break
+                            content = msg.content
+                            if isinstance(content, list):
+                                content = content[0] if len(content) > 0 else ""
+                            # Пропускаем приветственные сообщения (слишком длинные)
+                            if len(str(content)) < 500:  # Новые ответы обычно короче приветствия
+                                agent_msg = content
+                                break
                     
-                    # Если не нашли по роли, берем последнее сообщение (не системное)
+                    # Если не нашли короткое сообщение, берем любое последнее не-системное
                     if not agent_msg and len(messages) >= 2:
                         last_msg = messages[-1]
                         if hasattr(last_msg, 'role') and last_msg.role != 'system':
@@ -258,6 +267,9 @@ class Assistant(Agent):
                 
         except Exception as e:
             logger.error(f"❌ Delayed turn save error: {e}")
+        finally:
+            # Сбрасываем флаг сохранения
+            self._save_in_progress = False
             
     # Удалены неиспользуемые методы _immediate_turn_save и _delayed_turn_save
 
