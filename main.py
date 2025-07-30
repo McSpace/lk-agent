@@ -324,8 +324,11 @@ class Assistant(Agent):
             
         return f"Действие '{action_description}' сохранено в истории игры"
 
-    async def handle_imagegen_api(self, gm_text, last_turn_id):
+    async def handle_imagegen_api(self, gm_text, last_turn_id, user_text):
         """Фоновая обработка генерации и отправки картинки"""
+        image_url = ""
+        image_prompt = ""
+        
         try:
             # Конвертируем сообщение в правильный формат для API
             if isinstance(gm_text, list):
@@ -339,8 +342,8 @@ class Assistant(Agent):
             result = await send_to_imageGen_api(chat_history_for_api, last_turn_id, self.game_data)
             
             if result:
-                image_url = result.get('image_url')
-                image_prompt = result.get('illustration_prompt')
+                image_url = result.get('image_url', '')
+                image_prompt = result.get('illustration_prompt', '')
 
                 if image_url:
                     # Сохраняем в userdata для логирования
@@ -354,14 +357,16 @@ class Assistant(Agent):
                         topic="topic1"  # Фронтенд слушает этот topic
                     )
                     logger.info(f"🖼️ Image sent to frontend: {image_url}")
-
-                    # Сохраняем ход с картинкой - используем сохраненные данные пользователя  
-                    if hasattr(self, 'last_user_message'):
-                        user_text = self.last_user_message
-                        await save_next_turn_api(user_text, gm_text, str(self.game_data.game.id), image_url, image_prompt)
-                        
         except Exception as e:
             logger.error(f"❌ ImageGen API error: {e}")
+        
+        # ВСЕГДА сохраняем ход (с картинкой если есть, без если нет)
+        try:
+            if self.game_data and self.game_data.game:
+                await save_next_turn_api(user_text, gm_text, str(self.game_data.game.id), image_url, image_prompt)
+                logger.info("📊 Turn saved with image data")
+        except Exception as e:
+            logger.error(f"❌ Turn save error: {e}")
 
     async def save_turn_background(self, user_text: str, agent_text: str):
         """Фоновое сохранение хода без картинки"""
@@ -383,16 +388,18 @@ class Assistant(Agent):
             
             logger.info(f"💾 Saving turn - User: '{user_message[:50]}...', Agent: '{agent_message[:50]}...'")
             
-            # Сохраняем ход асинхронно
-            import asyncio
-            asyncio.create_task(self.save_turn_background(user_message, agent_message))
-            logger.info("📊 Turn saved successfully")
+            # НЕ сохраняем ход сразу - ждем генерации картинки
+            # import asyncio
+            # asyncio.create_task(self.save_turn_background(user_message, agent_message))
+            # logger.info("📊 Turn saved successfully")
             
-            # Генерируем картинку на каждом ходе (убираем проверку ключевых слов)
+            # Генерируем картинку на каждом ходе - сохранение произойдет там
             import uuid
             turn_id = str(uuid.uuid4())
             logger.info("🎨 Image generation triggered for every turn")
-            asyncio.create_task(self.handle_imagegen_api(agent_message, turn_id))
+            # Используем сохраненное пользовательское сообщение
+            user_msg = getattr(self, 'last_user_message', user_message)
+            asyncio.create_task(self.handle_imagegen_api(agent_message, turn_id, user_msg))
                 
         except Exception as e:
             logger.error(f"❌ Save and generate error: {e}")
