@@ -12,11 +12,13 @@ from livekit.agents import (
     JobContext,
     JobProcess,
     WorkerOptions,
+    RunContext,
     cli,
     llm,
     tts,
     vad,
 )
+from livekit.agents.llm import function_tool
 from livekit.plugins import deepgram, openai, silero, cartesia, google
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from dotenv import load_dotenv
@@ -107,7 +109,14 @@ class Assistant(Agent):
             instructions=f"""
         Ты ведущий текстовой ролевой игры.
         Пользователь описывает свои действия, а ты описываешь реакцию мира.
-        Отвечай на '{user_lang}' языке.
+        Отвечай на '{user_lang}' языке кратко, но увлекательно.
+        
+        У тебя есть доступ к игровым инструментам:
+        - roll_dice: для броска костей при проверках
+        - check_inventory: для проверки инвентаря игрока
+        - save_game_state: для сохранения важных моментов игры
+        
+        Используй эти инструменты когда игрок пытается выполнить действия требующие проверок.
 
         Игровой мир:
         {game_data.world_description if game_data else 'Средневековый мир с магией'}
@@ -129,6 +138,40 @@ class Assistant(Agent):
         )
         logger.info(f"📢 Sending greeting: {greeting[:100]}...")
         await self.session.generate_reply(instructions=greeting)
+
+    @function_tool
+    async def roll_dice(self, context: RunContext, sides: int = 20):
+        """
+        Бросает игральную кость для определения результата действий.
+        
+        Args:
+            sides: Количество граней на кости (по умолчанию 20)
+        """
+        import random
+        result = random.randint(1, sides)
+        logger.info(f"🎲 Dice roll: {result} (d{sides})")
+        return f"Результат броска d{sides}: {result}"
+
+    @function_tool 
+    async def check_inventory(self, context: RunContext):
+        """
+        Показывает инвентарь игрока.
+        """
+        logger.info("🎒 Checking player inventory")
+        # В будущем здесь можно интегрировать с API для получения реального инвентаря
+        return "В вашем инвентаре: меч, зелье лечения, 50 золотых монет, факел"
+
+    @function_tool
+    async def save_game_state(self, context: RunContext, action_description: str):
+        """
+        Сохраняет текущее состояние игры и действие игрока.
+        
+        Args:
+            action_description: Описание действия игрока
+        """
+        logger.info(f"💾 Saving game state: {action_description[:50]}...")
+        # Здесь можно интегрировать с Story API для сохранения ходов
+        return f"Действие '{action_description}' сохранено в истории игры"
 
     # async def handle_imagegen_api(self, gm_text, last_turn_id):
     #     try:
@@ -219,19 +262,32 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("user_speech_committed")
     def on_user_speech_committed(user_msg):
-        logger.info(f"🎤 User speech committed: {user_msg.content}")
+        logger.info(f"🎤 Player said: {user_msg.content}")
 
     @session.on("agent_speech_committed") 
     def on_agent_speech_committed(agent_msg):
-        logger.info(f"🤖 Agent speech committed: {agent_msg.content}")
+        logger.info(f"🗣️ Agent said: {agent_msg.content}")
 
     @session.on("user_started_speaking")
     def on_user_started_speaking():
-        logger.info("🗣️ User started speaking")
+        logger.info("👂 Player started speaking")
 
     @session.on("user_stopped_speaking")
     def on_user_stopped_speaking():
-        logger.info("🤫 User stopped speaking")
+        logger.info("🤫 Player stopped speaking")
+
+    @session.on("function_calls_finished")
+    def on_function_calls_finished(called_functions):
+        for func in called_functions:
+            logger.info(f"⚙️ Function called: {func.call_info.function_info.name}")
+
+    @session.on("agent_started_speaking")  
+    def on_agent_started_speaking():
+        logger.info("🎙️ Agent started speaking")
+
+    @session.on("agent_stopped_speaking")
+    def on_agent_stopped_speaking():
+        logger.info("🔇 Agent stopped speaking")
 
     # Убираем потенциально проблемные обработчики событий
     # @session.on("vad_state_changed")
