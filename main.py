@@ -65,7 +65,7 @@ class GameData(BaseModel):
 async def get_game_data(game_id: str) -> Optional[GameData]:
     try:
         async with aiohttp.ClientSession() as session:
-            url = f"{os.getenv('STORY_API_URL')}/games/{game_id}"
+            url = f"{os.getenv('STORY_API_URL')}/api/v1/games/{game_id}"
             async with session.get(url) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -100,16 +100,24 @@ async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
 async def save_next_turn_api(user_text: str, gm_text: str, game_id: str, image_url: str = "", image_prompt: str = ""):
     """Асинхронное сохранение хода в Story API"""
     try:
+        # Обеспечиваем правильный формат данных для API
+        # Исправляем массив в строку если необходимо
+        if isinstance(user_text, list):
+            user_text = user_text[0] if len(user_text) > 0 else ""
+        if isinstance(gm_text, list):
+            gm_text = gm_text[0] if len(gm_text) > 0 else ""
+            
         async with aiohttp.ClientSession() as session:
             payload = {
                 "game_id": game_id,
-                "player_text": user_text,
-                "gm_response": gm_text,
-                "image_url": image_url,
-                "image_prompt": image_prompt
+                "player_text": str(user_text),  # Убеждаемся что это строка
+                "gm_response": str(gm_text),    # Убеждаемся что это строка
+                "gm_prompt": f"System prompt for turn: {user_text}",  # Добавляем обязательное поле
+                "image_url": image_url or None,      # API ожидает null вместо пустой строки
+                "image_prompt": image_prompt or None # API ожидает null вместо пустой строки
             }
             logger.info("💾 Saving turn to API: %s", payload)
-            async with session.post(f"{os.getenv('STORY_API_URL')}/turns", json=payload) as response:
+            async with session.post(f"{os.getenv('STORY_API_URL')}/api/v1/turns", json=payload) as response:
                 if response.status == 200:
                     logger.info("✅ Turn saved successfully")
                 else:
@@ -164,19 +172,31 @@ class Assistant(Agent):
         logger.info(f"🔍 turn_ctx type: {type(turn_ctx)}")
         logger.info(f"🔍 turn_ctx attributes: {dir(turn_ctx)}")
         
-        # Пробуем разные способы получения сообщений
-        messages = getattr(turn_ctx, 'messages', None)
-        logger.info(f"🔍 turn_ctx.messages: {messages} (len: {len(messages) if messages else 'None'})")
+        # Пробуем правильный способ получения сообщений из ChatContext
+        try:
+            items = turn_ctx.items if hasattr(turn_ctx, 'items') else []
+            logger.info(f"🔍 turn_ctx.items: {len(items)} items")
+            for i, item in enumerate(items):
+                logger.info(f"🔍 Item {i}: {type(item)} - {getattr(item, 'content', 'no content')[:50]}...")
+        except Exception as e:
+            logger.error(f"❌ Error getting turn_ctx items: {e}")
         
-        # Пробуем другие атрибуты
-        for attr in ['history', 'chat_history', 'conversation', 'msgs']:
-            if hasattr(turn_ctx, attr):
-                value = getattr(turn_ctx, attr)
-                logger.info(f"🔍 turn_ctx.{attr}: {type(value)} (len: {len(value) if hasattr(value, '__len__') else 'no len'})")
+        # Проверяем new_message структуру
+        logger.info(f"🔍 new_message type: {type(new_message)}")
+        logger.info(f"🔍 new_message.content: {new_message.content}")
+        logger.info(f"🔍 new_message attributes: {dir(new_message)}")
         
         # Сохраняем контекст и сообщение для дальнейшего использования
-        self.last_user_message = new_message.content
+        # Исправляем формат - берем первый элемент если это массив
+        user_content = new_message.content
+        if isinstance(user_content, list) and len(user_content) > 0:
+            user_content = user_content[0]
+        elif isinstance(user_content, list):
+            user_content = ""
+            
+        self.last_user_message = str(user_content)
         self.current_turn_ctx = turn_ctx
+        logger.info(f"🔧 Processed user message: '{self.last_user_message}'")
         
         # Пробуем простое сохранение без задержки (сразу)
         logger.info("💾 Attempting immediate turn save...")
@@ -194,10 +214,10 @@ class Assistant(Agent):
             
             # Используем сохраненный контекст чата
             if hasattr(self, 'current_turn_ctx') and self.current_turn_ctx:
-                # В turn_ctx должна быть история сообщений
-                messages = getattr(self.current_turn_ctx, 'messages', [])
+                # В turn_ctx история сообщений хранится в items
+                messages = getattr(self.current_turn_ctx, 'items', [])
                 
-                if len(messages) >= 2:
+                if len(messages) >= 1:
                     # Берем последние сообщения пользователя и агента
                     user_msg = getattr(self, 'last_user_message', '')
                     # Последнее сообщение должно быть от агента
@@ -281,7 +301,7 @@ class Assistant(Agent):
         try:
             # Используем сохраненный контекст или создаем заглушку
             if hasattr(self, 'current_turn_ctx') and self.current_turn_ctx:
-                chat_history = getattr(self.current_turn_ctx, 'messages', [])
+                chat_history = getattr(self.current_turn_ctx, 'items', [])
             else:
                 chat_history = []
             if len(chat_history) >= 2:
@@ -311,7 +331,7 @@ class Assistant(Agent):
         try:
             # Используем сохраненный контекст чата или создаем заглушку
             if hasattr(self, 'current_turn_ctx') and self.current_turn_ctx:
-                chat_history = getattr(self.current_turn_ctx, 'messages', [])
+                chat_history = getattr(self.current_turn_ctx, 'items', [])
             else:
                 # Создаем минимальную историю для API
                 chat_history = [{"content": gm_text}]
@@ -381,7 +401,7 @@ class Assistant(Agent):
             
             # Используем сохраненный контекст
             if hasattr(self, 'current_turn_ctx') and self.current_turn_ctx:
-                chat_history = getattr(self.current_turn_ctx, 'messages', [])
+                chat_history = getattr(self.current_turn_ctx, 'items', [])
             else:
                 chat_history = []
             
