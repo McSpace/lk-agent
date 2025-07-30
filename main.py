@@ -103,6 +103,23 @@ async def send_to_imageGen_api(message_data, turn_id, game_data: GameData):
         logger.error(f"❌ Image generation failed: {e}")
         return None
 
+async def generate_summary_api(game_id: str) -> bool:
+    """Генерирует саммари через API"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = f"{os.getenv('STORY_API_URL')}/api/v1/summary/{game_id}/generate"
+            async with session.post(url) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    logger.info(f"✅ Summary generated for game {game_id}: turn {result.get('turn_number', 'unknown')}")
+                    return True
+                else:
+                    logger.error(f"❌ Summary generation failed: {response.status}")
+                    return False
+    except Exception as e:
+        logger.error(f"❌ Summary generation error: {e}")
+        return False
+
 async def save_next_turn_api(user_text: str, gm_text: str, game_id: str, image_url: str = "", image_prompt: str = ""):
     """Асинхронное сохранение хода в Story API"""
     try:
@@ -160,15 +177,19 @@ class Assistant(Agent):
         super().__init__(instructions=instructions.strip())
         self.game_data = game_data
         self.ctx = ctx
+        self.turn_counter = 0  # Счетчик ходов для автоматической генерации саммари
 
     async def on_enter(self):
         logger.info("🎮 RPG Agent entered the session")
-        # Генерируем приветствие
+        # Получаем приветствие но НЕ используем session.generate_reply() чтобы не загрязнять chat context
         greeting = self.game_data.latest_summary.summary_text if self.game_data and self.game_data.latest_summary else (
             self.game_data.intro if self.game_data and self.game_data.intro else "Добро пожаловать в игру! Опишите ваши действия."
         )
-        logger.info(f"📢 Sending greeting: {greeting[:100]}...")
-        await self.session.generate_reply(instructions=greeting)
+        logger.info(f"📢 Prepared greeting: {greeting[:100]}...")
+        # Отправляем приветствие напрямую через TTS без добавления в chat context
+        if hasattr(self.session, 'tts') and self.session.tts:
+            await self.session.tts.synthesize(greeting)
+            logger.info("🔊 Greeting sent via TTS without polluting chat context")
 
     async def on_user_turn_completed(self, turn_ctx, new_message):
         """Вызывается когда пользователь закончил говорить, до ответа агента"""
@@ -230,20 +251,36 @@ class Assistant(Agent):
                     # Ищем последнее пользовательское и агентское сообщение
                     user_msg = getattr(self, 'last_user_message', '')
                     
-                    # Ищем самое свежее сообщение от агента (не старое приветствие)
+                    # Улучшенная логика поиска свежего ответа агента
                     agent_msg = ""
-                    # Ищем последнее assistant сообщение, которое НЕ является приветствием
+                    user_message_time = None
+                    
+                    # Сначала найдем время последнего пользовательского сообщения
+                    for msg in reversed(messages):
+                        if hasattr(msg, 'role') and msg.role == 'user':
+                            user_message_time = getattr(msg, 'timestamp', None) or getattr(msg, 'created_at', None)
+                            break
+                    
+                    # Теперь ищем assistant сообщение, которое появилось ПОСЛЕ пользовательского
                     for msg in reversed(messages):
                         if hasattr(msg, 'role') and msg.role == 'assistant':
                             content = msg.content
                             if isinstance(content, list):
                                 content = content[0] if len(content) > 0 else ""
-                            # Пропускаем приветственные сообщения (слишком длинные)
-                            if len(str(content)) < 500:  # Новые ответы обычно короче приветствия
+                            
+                            msg_time = getattr(msg, 'timestamp', None) or getattr(msg, 'created_at', None)
+                            
+                            # Если у нас есть временные метки, используем их для определения порядка
+                            if user_message_time and msg_time:
+                                if msg_time > user_message_time:
+                                    agent_msg = content
+                                    break
+                            else:
+                                # Fallback: берем последнее assistant сообщение (уже в обратном порядке)
                                 agent_msg = content
                                 break
                     
-                    # Если не нашли короткое сообщение, берем любое последнее не-системное
+                    # Если все еще не нашли, берем самое последнее не-системное сообщение
                     if not agent_msg and len(messages) >= 2:
                         last_msg = messages[-1]
                         if hasattr(last_msg, 'role') and last_msg.role != 'system':
@@ -373,6 +410,20 @@ class Assistant(Agent):
             if self.game_data and self.game_data.game:
                 await save_next_turn_api(user_text, gm_text, str(self.game_data.game.id), image_url, image_prompt)
                 logger.info("📊 Turn saved with image data")
+                
+                # Увеличиваем счетчик ходов и проверяем нужно ли генерировать саммари
+                self.turn_counter += 1
+                logger.info(f"🔢 Turn counter: {self.turn_counter}")
+                
+                # Генерируем саммари каждые 6 ходов
+                if self.turn_counter % 6 == 0:
+                    logger.info(f"📝 Generating summary after {self.turn_counter} turns")
+                    summary_success = await generate_summary_api(str(self.game_data.game.id))
+                    if summary_success:
+                        logger.info("✅ Auto-summary generation completed")
+                    else:
+                        logger.warning("⚠️ Auto-summary generation failed")
+                        
         except Exception as e:
             logger.error(f"❌ Turn save error: {e}")
 
