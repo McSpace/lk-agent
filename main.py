@@ -273,8 +273,8 @@ class Assistant(Agent):
         result = random.randint(1, sides)
         logger.info(f"🎲 Dice roll: {result} (d{sides})")
         
-        # Попробуем сохранить ход когда срабатывает любая function
-        await self._trigger_turn_save_and_image("dice roll action")
+        # Убираем дополнительные сохранения из function tools - основное сохранение происходит в on_user_turn_completed
+        # await self._trigger_turn_save_and_image("dice roll action")
         
         return f"Результат броска d{sides}: {result}"
 
@@ -285,8 +285,8 @@ class Assistant(Agent):
         """
         logger.info("🎒 Checking player inventory")
         
-        # Попробуем сохранить ход когда срабатывает любая function
-        await self._trigger_turn_save_and_image("inventory check")
+        # Убираем дополнительные сохранения из function tools
+        # await self._trigger_turn_save_and_image("inventory check")
         
         return "В вашем инвентаре: меч, зелье лечения, 50 золотых монет, факел"
 
@@ -300,30 +300,9 @@ class Assistant(Agent):
         """
         logger.info(f"💾 Saving game state: {action_description[:50]}...")
         
-        # Пробуем сохранить ход через API (поскольку function tools точно работают)
-        try:
-            # Используем сохраненный контекст или создаем заглушку
-            if hasattr(self, 'current_turn_ctx') and self.current_turn_ctx:
-                chat_history = getattr(self.current_turn_ctx, 'items', [])
-            else:
-                chat_history = []
-            if len(chat_history) >= 2:
-                user_msg = chat_history[-2].content if len(chat_history) >= 2 else action_description
-                agent_msg = chat_history[-1].content if len(chat_history) >= 1 else ""
-                
-                # Сохраняем асинхронно
-                import asyncio
-                asyncio.create_task(self.save_turn_background(user_msg, agent_msg))
-                logger.info("📊 Turn save triggered from function_tool")
-                
-                # Генерируем картинку на каждом ходе
-                import uuid
-                turn_id = str(uuid.uuid4())
-                logger.info("🎨 Image generation triggered from function_tool")
-                asyncio.create_task(self.handle_imagegen_api(agent_msg, turn_id))
-                    
-        except Exception as e:
-            logger.error(f"❌ Function tool save error: {e}")
+        # Убираем дублирующие сохранения из function tools - основное сохранение происходит в on_user_turn_completed
+        # Сохранение и генерация картинки будут выполнены автоматически после завершения ответа агента
+        logger.info("🛠️ Function tool executed - turn will be saved by main handler")
             
         return f"Действие '{action_description}' сохранено в истории игры"
 
@@ -400,29 +379,7 @@ class Assistant(Agent):
         except Exception as e:
             logger.error(f"❌ Save and generate error: {e}")
 
-    async def _trigger_turn_save_and_image(self, action_type: str):
-        """Fallback триггер для function_tools (если основные события не работают)"""
-        try:
-            logger.info(f"🔄 Fallback trigger for: {action_type}")
-            
-            # Используем сохраненный контекст
-            if hasattr(self, 'current_turn_ctx') and self.current_turn_ctx:
-                chat_history = getattr(self.current_turn_ctx, 'items', [])
-            else:
-                chat_history = []
-            
-            if len(chat_history) >= 1:
-                # Пытаемся найти последние сообщения
-                user_msg = getattr(self, 'last_user_message', f"Player action: {action_type}")
-                agent_msg = chat_history[-1].content if len(chat_history) >= 1 else ""
-                
-                if user_msg and agent_msg:
-                    await self._save_and_generate_image(user_msg, agent_msg)
-                else:
-                    logger.warning("⚠️ Could not find messages for fallback save")
-                    
-        except Exception as e:
-            logger.error(f"❌ Fallback trigger error: {e}")
+    # Удален неиспользуемый метод _trigger_turn_save_and_image
 
 
 def prewarm(proc: JobProcess):
