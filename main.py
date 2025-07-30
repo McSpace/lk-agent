@@ -185,7 +185,31 @@ class Assistant(Agent):
             action_description: Описание действия игрока
         """
         logger.info(f"💾 Saving game state: {action_description[:50]}...")
-        # Здесь можно интегрировать с Story API для сохранения ходов
+        
+        # Пробуем сохранить ход через API (поскольку function tools точно работают)
+        try:
+            # Получаем историю чата
+            chat_history = await self.session.get_chat_history()
+            if len(chat_history) >= 2:
+                user_msg = chat_history[-2].content if len(chat_history) >= 2 else action_description
+                agent_msg = chat_history[-1].content if len(chat_history) >= 1 else ""
+                
+                # Сохраняем асинхронно
+                import asyncio
+                asyncio.create_task(self.save_turn_background(user_msg, agent_msg))
+                logger.info("📊 Turn save triggered from function_tool")
+                
+                # Проверяем необходимость генерации картинки
+                if any(keyword in agent_msg.lower() for keyword in 
+                      ["видите", "перед вами", "появляется", "входите", "находите"]):
+                    import uuid
+                    turn_id = str(uuid.uuid4())
+                    logger.info("🎨 Image generation triggered from function_tool")
+                    asyncio.create_task(self.handle_imagegen_api(agent_msg, turn_id))
+                    
+        except Exception as e:
+            logger.error(f"❌ Function tool save error: {e}")
+            
         return f"Действие '{action_description}' сохранено в истории игры"
 
     async def handle_imagegen_api(self, gm_text, last_turn_id):
@@ -334,6 +358,35 @@ async def entrypoint(ctx: JobContext):
     def on_function_calls_finished(called_functions):
         for func in called_functions:
             logger.info(f"⚙️ Function called: {func.call_info.function_info.name}")
+    
+    # Добавляем дополнительные event listeners для отладки
+    @session.on("user_message")
+    def on_user_message(msg):
+        nonlocal last_user_message
+        logger.info(f"🎤 User message: {msg.content}")
+        last_user_message = msg.content
+
+    @session.on("agent_message")
+    def on_agent_message(msg):
+        nonlocal turn_counter, last_user_message
+        logger.info(f"🗣️ Agent message: {msg.content}")
+        
+        # Асинхронно сохраняем ход в фоне
+        if last_user_message:
+            import asyncio
+            asyncio.create_task(assistant.save_turn_background(last_user_message, msg.content))
+            
+            turn_counter += 1
+            logger.info(f"📊 Turn #{turn_counter} completed")
+            
+            # Генерируем картинку при необходимости
+            if should_generate_image(msg.content, turn_counter):
+                import uuid
+                turn_id = str(uuid.uuid4())
+                logger.info(f"🎨 Triggering image generation for turn #{turn_counter}")
+                asyncio.create_task(assistant.handle_imagegen_api(msg.content, turn_id))
+            
+            last_user_message = ""
 
     @session.on("agent_started_speaking")  
     def on_agent_started_speaking():
@@ -342,6 +395,29 @@ async def entrypoint(ctx: JobContext):
     @session.on("agent_stopped_speaking")
     def on_agent_stopped_speaking():
         logger.info("🔇 Agent stopped speaking")
+        
+    # Пробуем разные варианты событий для сообщений
+    @session.on("user_speech_transcribed")
+    def on_user_speech_transcribed(msg):
+        logger.info(f"📝 User speech transcribed: {msg}")
+
+    @session.on("agent_speech_synthesized") 
+    def on_agent_speech_synthesized(msg):
+        logger.info(f"🔊 Agent speech synthesized: {msg}")
+
+    @session.on("conversation_turn_finished")
+    def on_conversation_turn_finished(turn):
+        logger.info(f"🔄 Conversation turn finished: {turn}")
+        
+    # Попробуем отловить все неизвестные события
+    def log_all_events(event_name, *args, **kwargs):
+        logger.info(f"🔍 Unknown event: {event_name} with args: {args}")
+        
+    # Добавляем универсальный обработчик (если поддерживается)
+    try:
+        session.on("*", log_all_events)
+    except:
+        pass
 
     # Убираем потенциально проблемные обработчики событий
     # @session.on("vad_state_changed")
