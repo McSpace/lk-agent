@@ -52,6 +52,16 @@ class GameSummary(BaseModel):
     turn_number: int
     summary_text: str
 
+class Turn(BaseModel):
+    id: UUID
+    game_id: UUID
+    turn_number: int
+    player_text: Optional[str]
+    gm_response: Optional[str]
+    image_url: Optional[str]
+    image_prompt: Optional[str]
+    created_at: datetime
+
 class GameData(BaseModel):
     world_description: str
     character_description: str
@@ -61,6 +71,7 @@ class GameData(BaseModel):
     latest_summary: Optional[GameSummary]
     game: Game
     user_lang: str
+    turns: Optional[list[Turn]] = []
 
 async def get_game_data(game_id: str) -> Optional[GameData]:
     try:
@@ -181,15 +192,62 @@ class Assistant(Agent):
 
     async def on_enter(self):
         logger.info("🎮 RPG Agent entered the session")
-        # Получаем приветствие но НЕ используем session.generate_reply() чтобы не загрязнять chat context
+        
+        # Отправляем последнюю картинку на фронт если это продолжение игры
+        await self._send_latest_image_to_frontend()
+        
+        # Получаем приветствие/саммари но НЕ используем session.generate_reply() чтобы не загрязнять chat context
         greeting = self.game_data.latest_summary.summary_text if self.game_data and self.game_data.latest_summary else (
             self.game_data.intro if self.game_data and self.game_data.intro else "Добро пожаловать в игру! Опишите ваши действия."
         )
-        logger.info(f"📢 Prepared greeting: {greeting[:100]}...")
+        
+        # Если есть latest_summary - это продолжение игры
+        if self.game_data and self.game_data.latest_summary:
+            logger.info(f"📖 Playing latest summary for continuing game: {greeting[:100]}...")
+        else:
+            logger.info(f"📢 Prepared intro greeting for new game: {greeting[:100]}...")
+            
         # Отправляем приветствие напрямую через TTS без добавления в chat context
         if hasattr(self.session, 'tts') and self.session.tts:
             await self.session.tts.synthesize(greeting)
-            logger.info("🔊 Greeting sent via TTS without polluting chat context")
+            logger.info("🔊 Greeting/Summary sent via TTS without polluting chat context")
+            
+    async def _send_latest_image_to_frontend(self):
+        """Отправляет последнюю картинку на фронтенд при старте сессии"""
+        try:
+            if not self.game_data or not self.game_data.turns:
+                logger.info("📸 No turns available, no image to send")
+                return
+                
+            # Находим последний ход с картинкой
+            latest_turn_with_image = None
+            for turn in reversed(self.game_data.turns):
+                if turn.image_url:
+                    latest_turn_with_image = turn
+                    break
+                    
+            if not latest_turn_with_image:
+                logger.info("📸 No image found in recent turns")
+                return
+                
+            # Небольшая задержка чтобы участники успели подключиться
+            await asyncio.sleep(1)
+            
+            # Проверяем что участники подключены
+            participants_count = len(self.ctx.room.remote_participants)
+            logger.info(f"🔍 Room has {participants_count} remote participants before sending startup image")
+            
+            # Отправляем картинку через DataChannel
+            image_url = latest_turn_with_image.image_url
+            await self.ctx.room.local_participant.publish_data(
+                image_url.encode('utf-8'),
+                reliable=True,
+                topic="topic1"
+            )
+            logger.info(f"🖼️ Latest image sent to frontend on session start: {image_url}")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to send latest image: {e}")
 
     async def on_user_turn_completed(self, turn_ctx, new_message):
         """Вызывается когда пользователь закончил говорить, до ответа агента"""
