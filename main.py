@@ -76,31 +76,46 @@ async def get_game_data(game_id: str) -> Optional[GameData]:
         logger.error(f"Error fetching game data: {e}")
         return None
 
-# async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
-#     async with aiohttp.ClientSession() as session:
-#         payload = {
-#             "pic_id": turn_id,
-#             "chat_history": messages[-1],
-#             "illustration_style": game_data.image_style_prompt,
-#             "main_character": game_data.character_appearance
-#         }
-#         logger.info("Sending image generation payload: %s", payload)
-#         async with session.post("https://storyimagegen-production.up.railway.app/process_chat",
-#                                 timeout=60,
-#                                 json=payload) as response:
-#             return await response.json()
+async def send_to_imageGen_api(messages, turn_id, game_data: GameData):
+    """Асинхронная генерация картинки для игровой сцены"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            payload = {
+                "pic_id": turn_id,
+                "chat_history": messages[-1],
+                "illustration_style": game_data.image_style_prompt,
+                "main_character": game_data.character_appearance
+            }
+            logger.info("🎨 Sending image generation payload: %s", payload)
+            async with session.post("https://storyimagegen-production.up.railway.app/process_chat",
+                                    timeout=60,
+                                    json=payload) as response:
+                result = await response.json()
+                logger.info("✅ Image generation completed")
+                return result
+    except Exception as e:
+        logger.error(f"❌ Image generation failed: {e}")
+        return None
 
-# async def save_next_turn_api(user_text: str, gm_text: str, game_id: str, image_url: str, image_prompt: str):
-#     async with aiohttp.ClientSession() as session:
-#         payload = {
-#             "game_id": game_id,
-#             "player_text": user_text,
-#             "gm_response": gm_text,
-#             "image_url": image_url,
-#             "image_prompt": image_prompt
-#         }
-#         logger.info("Saving turn to API: %s", payload)
-#         await session.post(f"{os.getenv('STORY_API_URL')}/turns", json=payload)
+async def save_next_turn_api(user_text: str, gm_text: str, game_id: str, image_url: str = "", image_prompt: str = ""):
+    """Асинхронное сохранение хода в Story API"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            payload = {
+                "game_id": game_id,
+                "player_text": user_text,
+                "gm_response": gm_text,
+                "image_url": image_url,
+                "image_prompt": image_prompt
+            }
+            logger.info("💾 Saving turn to API: %s", payload)
+            async with session.post(f"{os.getenv('STORY_API_URL')}/turns", json=payload) as response:
+                if response.status == 200:
+                    logger.info("✅ Turn saved successfully")
+                else:
+                    logger.error(f"❌ Turn save failed: {response.status}")
+    except Exception as e:
+        logger.error(f"❌ Turn save error: {e}")
 
 
 class Assistant(Agent):
@@ -173,27 +188,44 @@ class Assistant(Agent):
         # Здесь можно интегрировать с Story API для сохранения ходов
         return f"Действие '{action_description}' сохранено в истории игры"
 
-    # async def handle_imagegen_api(self, gm_text, last_turn_id):
-    #     try:
-    #         chat_history = await self.get_chat_history()
-    #         result = await send_to_imageGen_api(chat_history, last_turn_id, self.game_data)
-    #         image_url = result.get('image_url')
-    #         image_prompt = result.get('illustration_prompt')
+    async def handle_imagegen_api(self, gm_text, last_turn_id):
+        """Фоновая обработка генерации и отправки картинки"""
+        try:
+            # Получаем историю чата для контекста
+            chat_history = await self.session.get_chat_history()
+            
+            # Генерируем картинку асинхронно
+            result = await send_to_imageGen_api(chat_history, last_turn_id, self.game_data)
+            
+            if result:
+                image_url = result.get('image_url')
+                image_prompt = result.get('illustration_prompt')
 
-    #         if image_url:
-    #             self.ctx.proc.userdata["pic_url"] = image_url
-    #             self.ctx.proc.userdata["image_prompt"] = image_prompt
-    #             participant = await self.ctx.wait_for_participant()
-    #             await self.ctx.room.local_participant.publish_data(image_url,
-    #                                                            reliable=True,
-    #                                                            destination_identities=[participant.identity],
-    #                                                            topic="topic1")
+                if image_url:
+                    # Сохраняем в userdata для логирования
+                    self.ctx.proc.userdata["pic_url"] = image_url
+                    self.ctx.proc.userdata["image_prompt"] = image_prompt
+                    
+                    # Отправляем картинку на фронтенд через DataChannel
+                    await self.ctx.room.local_participant.publish_data(
+                        image_url.encode('utf-8'),
+                        reliable=True,
+                        topic="topic1"  # Фронтенд слушает этот topic
+                    )
+                    logger.info(f"🖼️ Image sent to frontend: {image_url}")
 
-    #             if len(chat_history) > 2:
-    #                 user_text = chat_history[-1].content
-    #                 await save_next_turn_api(user_text, gm_text, str(self.game_data.game.id), image_url, image_prompt)
-    #     except Exception as e:
-    #         logger.error(f"ImageGen API error: {e}")
+                    # Сохраняем ход с картинкой если есть история
+                    if len(chat_history) > 2:
+                        user_text = chat_history[-2].content if len(chat_history) >= 2 else ""
+                        await save_next_turn_api(user_text, gm_text, str(self.game_data.game.id), image_url, image_prompt)
+                        
+        except Exception as e:
+            logger.error(f"❌ ImageGen API error: {e}")
+
+    async def save_turn_background(self, user_text: str, agent_text: str):
+        """Фоновое сохранение хода без картинки"""
+        if self.game_data and self.game_data.game:
+            await save_next_turn_api(user_text, agent_text, str(self.game_data.game.id))
 
 
 def prewarm(proc: JobProcess):
@@ -262,11 +294,33 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("user_speech_committed")
     def on_user_speech_committed(user_msg):
+        nonlocal last_user_message
         logger.info(f"🎤 Player said: {user_msg.content}")
+        last_user_message = user_msg.content
 
     @session.on("agent_speech_committed") 
     def on_agent_speech_committed(agent_msg):
+        nonlocal turn_counter, last_user_message
         logger.info(f"🗣️ Agent said: {agent_msg.content}")
+        
+        # Асинхронно сохраняем ход в фоне (не блокируя диалог)
+        if last_user_message:
+            import asyncio
+            asyncio.create_task(assistant.save_turn_background(last_user_message, agent_msg.content))
+            
+            # Увеличиваем счетчик ходов
+            turn_counter += 1
+            logger.info(f"📊 Turn #{turn_counter} completed")
+            
+            # Генерируем картинку при необходимости
+            if should_generate_image(agent_msg.content, turn_counter):
+                import uuid
+                turn_id = str(uuid.uuid4())
+                logger.info(f"🎨 Triggering image generation for turn #{turn_counter}")
+                asyncio.create_task(assistant.handle_imagegen_api(agent_msg.content, turn_id))
+            
+            # Сбрасываем последнее сообщение пользователя
+            last_user_message = ""
 
     @session.on("user_started_speaking")
     def on_user_started_speaking():
@@ -301,6 +355,22 @@ async def entrypoint(ctx: JobContext):
     # @session.on("stt_finished")
     # def on_stt_finished():
     #     logger.info("📝 STT finished processing")
+
+    # Переменные для отслеживания ходов и генерации картинок
+    last_user_message = ""
+    turn_counter = 0
+    
+    def should_generate_image(agent_text: str, turn_count: int) -> bool:
+        """Определяет когда нужно генерировать картинку"""
+        # Ключевые слова для генерации картинок
+        image_keywords = ["вы видите", "перед вами", "появляется", "входите", "находите", 
+                         "атакует", "сражение", "локация", "комната", "пещера", "лес"]
+        
+        # Генерируем картинку каждые 3 хода или при ключевых словах
+        has_keywords = any(keyword in agent_text.lower() for keyword in image_keywords)
+        periodic_generation = (turn_count % 3 == 0) and turn_count > 0
+        
+        return has_keywords or periodic_generation
 
     ctx.add_shutdown_callback(lambda: logger.info("Session ended."))
 
