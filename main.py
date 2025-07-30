@@ -249,6 +249,21 @@ class Assistant(Agent):
         except Exception as e:
             logger.error(f"❌ Failed to send latest image: {e}")
 
+    async def on_session_end(self):
+        """Вызывается при завершении игровой сессии"""
+        logger.info("🏁 Game session ending - generating final summary")
+        try:
+            if self.game_data and self.game_data.game:
+                summary_success = await generate_summary_api(str(self.game_data.game.id))
+                if summary_success:
+                    logger.info("✅ Final summary generated successfully on session end")
+                else:
+                    logger.warning("⚠️ Failed to generate final summary on session end")
+            else:
+                logger.info("📝 No game data available for final summary generation")
+        except Exception as e:
+            logger.error(f"❌ Error generating final summary on session end: {e}")
+
     async def on_user_turn_completed(self, turn_ctx, new_message):
         """Вызывается когда пользователь закончил говорить, до ответа агента"""
         logger.info(f"🎤 User turn completed: {new_message.content}")
@@ -662,7 +677,12 @@ async def entrypoint(ctx: JobContext):
     # Переменные для отслеживания состояния агента
     assistant.turn_counter = 0
 
-    ctx.add_shutdown_callback(lambda: logger.info("Session ended."))
+    # Добавляем callback для генерации финального саммари при завершении сессии
+    async def on_session_shutdown():
+        logger.info("Session ended.")
+        await assistant.on_session_end()
+    
+    ctx.add_shutdown_callback(on_session_shutdown)
 
     logger.info(f"Starting agent session with language: {user_lang} ({user_lang_code})")
     logger.info(f"STT language: {user_lang_code}")
