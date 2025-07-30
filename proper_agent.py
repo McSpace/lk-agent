@@ -23,9 +23,10 @@ class RPGAgent(Agent):
             instructions="""
             Ты ведущий текстовой ролевой игры на русском языке.
             Ты креативный и интересный рассказчик.
-            Отвечай кратко, но увлекательно.
+            Отвечай кратко, но увлекательно на русском языке.
             Описывай локации, события и реакции мира на действия игрока.
             Задавай игроку вопросы о его действиях.
+            Пользователь будет говорить с тобой на русском языке.
             """.strip()
         )
 
@@ -74,7 +75,7 @@ async def entrypoint(ctx: JobContext):
     # Создаем сессию с голосовыми компонентами
     session = AgentSession(
         vad=ctx.proc.userdata["vad"],
-        stt=deepgram.STT(language="ru-RU"),
+        stt=openai.STT(),
         llm=openai.LLM(model="gpt-4o-mini"),
         tts=openai.TTS(),
         turn_detection=MultilingualModel(),
