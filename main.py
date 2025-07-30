@@ -198,11 +198,11 @@ class Assistant(Agent):
         self.current_turn_ctx = turn_ctx
         logger.info(f"🔧 Processed user message: '{self.last_user_message}'")
         
-        # Пробуем простое сохранение без задержки (сразу)
-        logger.info("💾 Attempting immediate turn save...")
-        await self._immediate_turn_save()
+        # Убираем немедленное сохранение - только задержанное с правильным ответом агента
+        # logger.info("💾 Attempting immediate turn save...")
+        # await self._immediate_turn_save()
         
-        # Также добавляем задержанное сохранение как backup
+        # Только задержанное сохранение с полным ответом агента
         import asyncio
         asyncio.create_task(self._delayed_turn_save_with_context())
         
@@ -259,23 +259,7 @@ class Assistant(Agent):
         except Exception as e:
             logger.error(f"❌ Delayed turn save error: {e}")
             
-    async def _immediate_turn_save(self):
-        """Немедленное сохранение только с пользовательским сообщением"""
-        try:
-            user_msg = getattr(self, 'last_user_message', '')
-            if user_msg:
-                # Сохраняем ход только с пользовательским сообщением, агентский ответ добавим позже
-                logger.info(f"💾 Immediate save - User: '{user_msg[:50]}...', Agent: 'Processing...'")
-                await self._save_and_generate_image(user_msg, "Agent is thinking...")
-            else:
-                logger.warning("⚠️ No user message for immediate save")
-        except Exception as e:
-            logger.error(f"❌ Immediate turn save error: {e}")
-
-    # Fallback метод для сохранения без контекста
-    async def _delayed_turn_save(self):
-        """Старый метод - оставляем как fallback"""
-        logger.warning("⚠️ Using fallback turn save method")
+    # Удалены неиспользуемые методы _immediate_turn_save и _delayed_turn_save
 
     @function_tool
     async def roll_dice(self, context: RunContext, sides: int = 20):
@@ -332,13 +316,11 @@ class Assistant(Agent):
                 asyncio.create_task(self.save_turn_background(user_msg, agent_msg))
                 logger.info("📊 Turn save triggered from function_tool")
                 
-                # Проверяем необходимость генерации картинки
-                if any(keyword in agent_msg.lower() for keyword in 
-                      ["видите", "перед вами", "появляется", "входите", "находите"]):
-                    import uuid
-                    turn_id = str(uuid.uuid4())
-                    logger.info("🎨 Image generation triggered from function_tool")
-                    asyncio.create_task(self.handle_imagegen_api(agent_msg, turn_id))
+                # Генерируем картинку на каждом ходе
+                import uuid
+                turn_id = str(uuid.uuid4())
+                logger.info("🎨 Image generation triggered from function_tool")
+                asyncio.create_task(self.handle_imagegen_api(agent_msg, turn_id))
                     
         except Exception as e:
             logger.error(f"❌ Function tool save error: {e}")
@@ -408,17 +390,11 @@ class Assistant(Agent):
             asyncio.create_task(self.save_turn_background(user_message, agent_message))
             logger.info("📊 Turn saved successfully")
             
-            # Проверяем необходимость генерации картинки
-            image_keywords = ["видите", "перед вами", "появляется", "входите", "находите", 
-                            "атакует", "сражение", "локация", "комната", "пещера", "лес"]
-            
-            if any(keyword in agent_message.lower() for keyword in image_keywords):
-                import uuid
-                turn_id = str(uuid.uuid4())
-                logger.info("🎨 Image generation triggered by keywords")
-                asyncio.create_task(self.handle_imagegen_api(agent_message, turn_id))
-            else:
-                logger.info("🎨 No image keywords found, skipping generation")
+            # Генерируем картинку на каждом ходе (убираем проверку ключевых слов)
+            import uuid
+            turn_id = str(uuid.uuid4())
+            logger.info("🎨 Image generation triggered for every turn")
+            asyncio.create_task(self.handle_imagegen_api(agent_message, turn_id))
                 
         except Exception as e:
             logger.error(f"❌ Save and generate error: {e}")
