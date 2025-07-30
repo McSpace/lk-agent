@@ -160,37 +160,52 @@ class Assistant(Agent):
         """Вызывается когда пользователь закончил говорить, до ответа агента"""
         logger.info(f"🎤 User turn completed: {new_message.content}")
         
-        # Сохраняем сообщение пользователя
+        # Сохраняем контекст и сообщение для дальнейшего использования
         self.last_user_message = new_message.content
+        self.current_turn_ctx = turn_ctx
         
         # Добавляем асинхронную задачу для сохранения хода ПОСЛЕ ответа агента
         import asyncio
-        asyncio.create_task(self._delayed_turn_save())
+        asyncio.create_task(self._delayed_turn_save_with_context())
         
-    async def _delayed_turn_save(self):
+    async def _delayed_turn_save_with_context(self):
         """Задержанное сохранение хода после генерации ответа агента"""
         try:
             # Ждем немного чтобы агент сгенерировал ответ
             await asyncio.sleep(2)
             
-            # Получаем историю чата
-            chat_history = await self.get_chat_history()
-            
-            if len(chat_history) >= 2:
-                # Берем последние сообщения пользователя и агента
-                user_msg = getattr(self, 'last_user_message', '')
-                agent_msg = chat_history[-1].content if len(chat_history) >= 1 else ''
+            # Используем сохраненный контекст чата
+            if hasattr(self, 'current_turn_ctx') and self.current_turn_ctx:
+                # В turn_ctx должна быть история сообщений
+                messages = getattr(self.current_turn_ctx, 'messages', [])
                 
-                if user_msg and agent_msg:
-                    logger.info(f"💾 Delayed turn save - User: '{user_msg[:50]}...', Agent: '{agent_msg[:50]}...'")
-                    await self._save_and_generate_image(user_msg, agent_msg)
+                if len(messages) >= 2:
+                    # Берем последние сообщения пользователя и агента
+                    user_msg = getattr(self, 'last_user_message', '')
+                    # Последнее сообщение должно быть от агента
+                    agent_msg = messages[-1].content if messages and hasattr(messages[-1], 'content') else ''
+                    
+                    if user_msg and agent_msg:
+                        logger.info(f"💾 Context-based turn save - User: '{user_msg[:50]}...', Agent: '{agent_msg[:50]}...'")
+                        await self._save_and_generate_image(user_msg, agent_msg)
+                    else:
+                        logger.warning(f"⚠️ Missing messages - user: {bool(user_msg)}, agent: {bool(agent_msg)}")
+                        logger.info(f"📝 Available messages: {len(messages)}")
+                        # Попробуем просто с пользовательским сообщением
+                        if user_msg:
+                            await self._save_and_generate_image(user_msg, "Agent response processing...")
                 else:
-                    logger.warning("⚠️ Could not find messages for delayed save")
+                    logger.warning(f"⚠️ Not enough messages in context: {len(messages) if messages else 0}")
             else:
-                logger.warning("⚠️ Chat history too short for delayed save")
+                logger.warning("⚠️ No turn context available for delayed save")
                 
         except Exception as e:
             logger.error(f"❌ Delayed turn save error: {e}")
+            
+    # Fallback метод для сохранения без контекста
+    async def _delayed_turn_save(self):
+        """Старый метод - оставляем как fallback"""
+        logger.warning("⚠️ Using fallback turn save method")
 
     @function_tool
     async def roll_dice(self, context: RunContext, sides: int = 20):
@@ -233,8 +248,11 @@ class Assistant(Agent):
         
         # Пробуем сохранить ход через API (поскольку function tools точно работают)
         try:
-            # Получаем историю чата
-            chat_history = await self.get_chat_history()
+            # Используем сохраненный контекст или создаем заглушку
+            if hasattr(self, 'current_turn_ctx') and self.current_turn_ctx:
+                chat_history = getattr(self.current_turn_ctx, 'messages', [])
+            else:
+                chat_history = []
             if len(chat_history) >= 2:
                 user_msg = chat_history[-2].content if len(chat_history) >= 2 else action_description
                 agent_msg = chat_history[-1].content if len(chat_history) >= 1 else ""
@@ -260,8 +278,12 @@ class Assistant(Agent):
     async def handle_imagegen_api(self, gm_text, last_turn_id):
         """Фоновая обработка генерации и отправки картинки"""
         try:
-            # Получаем историю чата для контекста
-            chat_history = await self.get_chat_history()
+            # Используем сохраненный контекст чата или создаем заглушку
+            if hasattr(self, 'current_turn_ctx') and self.current_turn_ctx:
+                chat_history = getattr(self.current_turn_ctx, 'messages', [])
+            else:
+                # Создаем минимальную историю для API
+                chat_history = [{"content": gm_text}]
             
             # Генерируем картинку асинхронно
             result = await send_to_imageGen_api(chat_history, last_turn_id, self.game_data)
@@ -326,8 +348,11 @@ class Assistant(Agent):
         try:
             logger.info(f"🔄 Fallback trigger for: {action_type}")
             
-            # Получаем историю чата
-            chat_history = await self.get_chat_history()
+            # Используем сохраненный контекст
+            if hasattr(self, 'current_turn_ctx') and self.current_turn_ctx:
+                chat_history = getattr(self.current_turn_ctx, 'messages', [])
+            else:
+                chat_history = []
             
             if len(chat_history) >= 1:
                 # Пытаемся найти последние сообщения
