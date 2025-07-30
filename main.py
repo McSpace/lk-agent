@@ -10,6 +10,7 @@ from livekit.agents import (
     Agent,
     AgentSession,
     JobContext,
+    JobProcess,
     WorkerOptions,
     cli,
     llm,
@@ -120,6 +121,15 @@ class Assistant(Agent):
         self.game_data = game_data
         self.ctx = ctx
 
+    async def on_enter(self):
+        logger.info("🎮 RPG Agent entered the session")
+        # Генерируем приветствие
+        greeting = self.game_data.latest_summary.summary_text if self.game_data and self.game_data.latest_summary else (
+            self.game_data.intro if self.game_data and self.game_data.intro else "Добро пожаловать в игру! Опишите ваши действия."
+        )
+        logger.info(f"📢 Sending greeting: {greeting[:100]}...")
+        await self.session.generate_reply(instructions=greeting)
+
     # async def handle_imagegen_api(self, gm_text, last_turn_id):
     #     try:
     #         chat_history = await self.get_chat_history()
@@ -142,6 +152,11 @@ class Assistant(Agent):
     #     except Exception as e:
     #         logger.error(f"ImageGen API error: {e}")
 
+
+def prewarm(proc: JobProcess):
+    """Предзагрузка моделей"""
+    proc.userdata["vad"] = silero.VAD.load()
+    logger.info("🔥 Models prewarmed")
 
 async def entrypoint(ctx: JobContext):
     logger.info(f"🚀 Agent starting - Room: {ctx.room.name if ctx.room else 'None'}")
@@ -173,14 +188,11 @@ async def entrypoint(ctx: JobContext):
 
     try:
         session = AgentSession(
-            stt=deepgram.STT(language=user_lang_code),
+            stt=openai.STT(),
             llm=openai.LLM(model="gpt-4o-mini"),  # Используем более стабильную модель
-            tts=cartesia.TTS(
-                speed=0.5 if user_lang_code == "ru" else 1.0,
-                voice="da05e96d-ca10-4220-9042-d8acef654fa9",
-                language=user_lang_code
-            ),
-            vad=silero.VAD.load(),
+            tts=openai.TTS(),
+            vad=ctx.proc.userdata["vad"],
+            turn_detection=MultilingualModel(),
         )
         logger.info("AgentSession created successfully")
     except Exception as e:
@@ -241,34 +253,18 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"TTS settings: speed={0.5 if user_lang_code == 'ru' else 1.0}")
     
     try:
-        await session.start(
-            room=ctx.room,
-            agent=assistant,
-        )
-        logger.info("Agent session started successfully")
-        
-        # Ждем подключения пользователя
-        logger.info("⏳ Waiting for participant to join...")
-        participant = await ctx.wait_for_participant()
-        logger.info(f"✅ Participant joined: {participant.identity}")
+        await session.start(agent=assistant, room=ctx.room)
+        logger.info("✅ Agent session started successfully")
         
     except Exception as e:
         logger.error(f"Failed to start agent session: {e}")
         return
 
-    greeting = game_data.latest_summary.summary_text if game_data and game_data.latest_summary else (
-        game_data.intro if game_data and game_data.intro else "Добро пожаловать в игру! Опишите ваши действия."
-    )
-    logger.info(f"📢 Sending greeting: {greeting[:100]}...")  # Сократим лог
-    try:
-        await session.generate_reply(instructions=greeting)
-        logger.info("✅ Greeting sent successfully")
-    except Exception as e:
-        logger.error(f"❌ Failed to send greeting: {e}")
 
 
 if __name__ == "__main__":
     cli.run_app(WorkerOptions(
         shutdown_process_timeout=5,
         entrypoint_fnc=entrypoint,
+        prewarm_fnc=prewarm
     ))
