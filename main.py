@@ -207,10 +207,9 @@ class Assistant(Agent):
         else:
             logger.info(f"📢 Prepared intro greeting for new game: {greeting[:100]}...")
             
-        # Отправляем приветствие напрямую через TTS без добавления в chat context
-        if hasattr(self.session, 'tts') and self.session.tts:
-            await self.session.tts.synthesize(greeting)
-            logger.info("🔊 Greeting/Summary sent via TTS without polluting chat context")
+        # Отправляем приветствие/саммори через session.say()
+        await self.session.say(greeting, allow_interruptions=True, add_to_chat_ctx=False)
+        logger.info("🔊 Greeting/Summary played via session.say()")
             
     async def _send_latest_image_to_frontend(self):
         """Отправляет последнюю картинку на фронтенд при старте сессии"""
