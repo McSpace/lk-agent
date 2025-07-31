@@ -208,8 +208,16 @@ class Assistant(Agent):
             logger.info(f"📢 Prepared intro greeting for new game: {greeting[:100]}...")
             
         # Отправляем приветствие/саммори через session.say()
-        await self.session.say(greeting, allow_interruptions=True, add_to_chat_ctx=False)
-        logger.info("🔊 Greeting/Summary played via session.say()")
+        try:
+            logger.info(f"🔍 Checking session availability: {hasattr(self, 'session')}")
+            if hasattr(self, 'session') and self.session:
+                await self.session.say(greeting)
+                logger.info("🔊 Greeting/Summary played via session.say()")
+            else:
+                logger.warning("⚠️ Session not available in on_enter, skipping TTS playback")
+        except Exception as e:
+            logger.error(f"❌ Error in on_enter TTS playback: {e}")
+            logger.info("🎯 Continuing without TTS playback...")
             
     async def _send_latest_image_to_frontend(self):
         """Отправляет последнюю картинку на фронтенд при старте сессии"""
