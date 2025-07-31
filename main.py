@@ -594,7 +594,14 @@ async def entrypoint(ctx: JobContext):
         """Событийный обработчик для точного отслеживания завершения ответа агента"""
         try:
             item = event.item
-            logger.info(f"🎯 conversation_item_added: role={item.role}, content='{item.text_content()[:100]}...'")
+            # Безопасное получение содержимого для логирования
+            try:
+                content_preview = item.text_content() if callable(item.text_content) else item.text_content
+                content_preview = str(content_preview)[:100] if content_preview else "empty"
+            except:
+                content_preview = str(item.content)[:100] if hasattr(item, 'content') else "unknown"
+            
+            logger.info(f"🎯 conversation_item_added: role={item.role}, content='{content_preview}...'")
             
             if item.role == "user":
                 # Пользовательское сообщение добавлено в контекст
@@ -603,7 +610,13 @@ async def entrypoint(ctx: JobContext):
             elif item.role == "assistant":
                 # Агент завершил генерацию ответа!
                 if assistant.pending_user_message:
-                    agent_response = item.text_content()
+                    # Проверяем какой формат у text_content - свойство или метод
+                    try:
+                        agent_response = item.text_content() if callable(item.text_content) else item.text_content
+                    except Exception as e:
+                        logger.warning(f"⚠️ Error getting text_content: {e}, trying fallback")
+                        agent_response = str(item.content) if hasattr(item, 'content') else str(item)
+                    
                     user_message = assistant.pending_user_message
                     
                     logger.info(f"🤖 Agent response completed! Saving turn:")
