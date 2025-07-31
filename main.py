@@ -17,6 +17,7 @@ from livekit.agents import (
     llm,
     tts,
     vad,
+    ConversationItemAddedEvent,
 )
 from livekit.agents.llm import function_tool
 from livekit.plugins import deepgram, openai, silero, cartesia, google
@@ -189,6 +190,7 @@ class Assistant(Agent):
         self.game_data = game_data
         self.ctx = ctx
         self.turn_counter = 0  # Счетчик ходов для автоматической генерации саммари
+        self.pending_user_message = None  # Хранение пользовательского сообщения для событийной модели
 
     async def on_enter(self):
         logger.info("🎮 RPG Agent entered the session")
@@ -275,100 +277,32 @@ class Assistant(Agent):
         """Вызывается когда пользователь закончил говорить, до ответа агента"""
         logger.info(f"🎤 User turn completed: {new_message.content}")
         
-        # Диагностика контекста
-        logger.info(f"🔍 turn_ctx type: {type(turn_ctx)}")
-        logger.info(f"🔍 turn_ctx attributes: {dir(turn_ctx)}")
-        
-        # Пробуем правильный способ получения сообщений из ChatContext
-        try:
-            items = turn_ctx.items if hasattr(turn_ctx, 'items') else []
-            logger.info(f"🔍 turn_ctx.items: {len(items)} items")
-            for i, item in enumerate(items):
-                logger.info(f"🔍 Item {i}: {type(item)} - {getattr(item, 'content', 'no content')[:50]}...")
-        except Exception as e:
-            logger.error(f"❌ Error getting turn_ctx items: {e}")
-        
-        # Проверяем new_message структуру
-        logger.info(f"🔍 new_message type: {type(new_message)}")
-        logger.info(f"🔍 new_message.content: {new_message.content}")
-        logger.info(f"🔍 new_message attributes: {dir(new_message)}")
-        
-        # Сохраняем контекст и сообщение для дальнейшего использования
-        # Исправляем формат - берем первый элемент если это массив
+        # Извлекаем пользовательское сообщение
         user_content = new_message.content
         if isinstance(user_content, list) and len(user_content) > 0:
             user_content = user_content[0]
         elif isinstance(user_content, list):
             user_content = ""
             
-        self.last_user_message = str(user_content)
-        self.current_turn_ctx = turn_ctx
-        logger.info(f"🔧 Processed user message: '{self.last_user_message}'")
+        # Сохраняем для использования в conversation_item_added event
+        self.pending_user_message = str(user_content)
+        logger.info(f"💬 User message stored for event-based saving: '{self.pending_user_message[:100]}...'")
+        logger.info("⏳ Waiting for conversation_item_added event with agent response...")
         
-        # Убираем немедленное сохранение - только задержанное с правильным ответом агента
-        # logger.info("💾 Attempting immediate turn save...")
-        # await self._immediate_turn_save()
-        
-        # Только одно задержанное сохранение с полным ответом агента
-        # Предотвращаем множественные вызовы с помощью флага
-        if not hasattr(self, '_save_in_progress') or not self._save_in_progress:
-            self._save_in_progress = True
-            import asyncio
-            asyncio.create_task(self._delayed_turn_save_with_context())
-        
-    async def _delayed_turn_save_with_context(self):
-        """Задержанное сохранение хода после генерации ответа агента"""
+    async def _save_turn_immediately(self, user_message: str, agent_message: str):
+        """Немедленное сохранение хода с точными данными из conversation_item_added событий"""
         try:
-            # Ждем больше времени чтобы агент сгенерировал и добавил ответ в контекст
-            await asyncio.sleep(8)
+            logger.info(f"⚡ Immediate turn save triggered by conversation event")
+            logger.info(f"  👤 User: '{user_message[:50]}...'")
+            logger.info(f"  🤖 Agent: '{agent_message[:50]}...'")
             
-            # Используем сохраненный контекст чата
-            if hasattr(self, 'current_turn_ctx') and self.current_turn_ctx:
-                # В turn_ctx история сообщений хранится в items
-                messages = getattr(self.current_turn_ctx, 'items', [])
-                
-                if len(messages) >= 2:
-                    # Ищем последнее пользовательское и агентское сообщение
-                    user_msg = getattr(self, 'last_user_message', '')
-                    
-                    # Упрощенная логика: берем последнее сообщение от assistant
-                    # После 8 секунд задержки это должен быть правильный ответ на текущий запрос
-                    agent_msg = ""
-                    for msg in reversed(messages):
-                        if hasattr(msg, 'role') and msg.role == 'assistant':
-                            content = msg.content
-                            if isinstance(content, list):
-                                content = content[0] if len(content) > 0 else ""
-                            agent_msg = str(content)
-                            break
-                    
-                    logger.info(f"🔍 Found agent message: '{agent_msg[:100]}...' from {len(messages)} total messages")
-                    
-                    if user_msg and agent_msg:
-                        logger.info(f"💾 Context-based turn save - User: '{user_msg[:50]}...', Agent: '{str(agent_msg)[:50]}...'")
-                        await self._save_and_generate_image(user_msg, agent_msg)
-                    else:
-                        logger.warning(f"⚠️ Missing messages - user: {bool(user_msg)}, agent: {bool(agent_msg)}")
-                        logger.info(f"📝 Available messages: {len(messages)}")
-                        # Логируем все сообщения для отладки
-                        for i, msg in enumerate(messages):
-                            logger.info(f"📝 Message {i}: role={getattr(msg, 'role', 'unknown')}, content={str(getattr(msg, 'content', ''))[:100]}...")
-                        
-                        # Попробуем просто с пользовательским сообщением
-                        if user_msg:
-                            await self._save_and_generate_image(user_msg, "Agent response processing...")
-                else:
-                    logger.warning(f"⚠️ Not enough messages in context: {len(messages) if messages else 0}")
-            else:
-                logger.warning("⚠️ No turn context available for delayed save")
-                
+            # Прямо вызываем сохранение и генерацию изображения
+            await self._save_and_generate_image(user_message, agent_message)
+            
         except Exception as e:
-            logger.error(f"❌ Delayed turn save error: {e}")
-        finally:
-            # Сбрасываем флаг сохранения
-            self._save_in_progress = False
-            
-    # Удалены неиспользуемые методы _immediate_turn_save и _delayed_turn_save
+            logger.error(f"❌ Immediate turn save error: {e}")
+
+    # Старые методы с задержками удалены - используем событийную модель
 
     @function_tool
     async def roll_dice(self, context: RunContext, sides: int = 20):
@@ -654,6 +588,39 @@ async def entrypoint(ctx: JobContext):
     # @session.on("stt_finished")
     # def on_stt_finished():
     #     logger.info("📝 STT finished processing")
+
+    @session.on("conversation_item_added")
+    def on_conversation_item_added(event: ConversationItemAddedEvent):
+        """Событийный обработчик для точного отслеживания завершения ответа агента"""
+        try:
+            item = event.item
+            logger.info(f"🎯 conversation_item_added: role={item.role}, content='{item.text_content()[:100]}...'")
+            
+            if item.role == "user":
+                # Пользовательское сообщение добавлено в контекст
+                logger.info("👤 User message added to conversation context")
+                
+            elif item.role == "assistant":
+                # Агент завершил генерацию ответа!
+                if assistant.pending_user_message:
+                    agent_response = item.text_content()
+                    user_message = assistant.pending_user_message
+                    
+                    logger.info(f"🤖 Agent response completed! Saving turn:")
+                    logger.info(f"  👤 User: '{user_message[:50]}...'")
+                    logger.info(f"  🤖 Agent: '{agent_response[:50]}...'")
+                    
+                    # Сохраняем ход немедленно - агент точно завершил ответ
+                    import asyncio
+                    asyncio.create_task(assistant._save_turn_immediately(user_message, agent_response))
+                    
+                    # Очищаем pending сообщение
+                    assistant.pending_user_message = None
+                else:
+                    logger.warning("⚠️ Agent response received but no pending user message")
+                    
+        except Exception as e:
+            logger.error(f"❌ Error in conversation_item_added handler: {e}")
 
     # Переменные для отслеживания состояния агента
     assistant.turn_counter = 0
