@@ -320,7 +320,7 @@ class Assistant(Agent):
         """Задержанное сохранение хода после генерации ответа агента"""
         try:
             # Ждем больше времени чтобы агент сгенерировал и добавил ответ в контекст
-            await asyncio.sleep(5)
+            await asyncio.sleep(8)
             
             # Используем сохраненный контекст чата
             if hasattr(self, 'current_turn_ctx') and self.current_turn_ctx:
@@ -331,44 +331,18 @@ class Assistant(Agent):
                     # Ищем последнее пользовательское и агентское сообщение
                     user_msg = getattr(self, 'last_user_message', '')
                     
-                    # Улучшенная логика поиска свежего ответа агента
+                    # Упрощенная логика: берем последнее сообщение от assistant
+                    # После 8 секунд задержки это должен быть правильный ответ на текущий запрос
                     agent_msg = ""
-                    user_message_time = None
-                    
-                    # Сначала найдем время последнего пользовательского сообщения
-                    for msg in reversed(messages):
-                        if hasattr(msg, 'role') and msg.role == 'user':
-                            user_message_time = getattr(msg, 'timestamp', None) or getattr(msg, 'created_at', None)
-                            break
-                    
-                    # Теперь ищем assistant сообщение, которое появилось ПОСЛЕ пользовательского
                     for msg in reversed(messages):
                         if hasattr(msg, 'role') and msg.role == 'assistant':
                             content = msg.content
                             if isinstance(content, list):
                                 content = content[0] if len(content) > 0 else ""
-                            
-                            msg_time = getattr(msg, 'timestamp', None) or getattr(msg, 'created_at', None)
-                            
-                            # Если у нас есть временные метки, используем их для определения порядка
-                            if user_message_time and msg_time:
-                                if msg_time > user_message_time:
-                                    agent_msg = content
-                                    break
-                            else:
-                                # Fallback: берем последнее assistant сообщение (уже в обратном порядке)
-                                agent_msg = content
-                                break
+                            agent_msg = str(content)
+                            break
                     
-                    # Если все еще не нашли, берем самое последнее не-системное сообщение
-                    if not agent_msg and len(messages) >= 2:
-                        last_msg = messages[-1]
-                        if hasattr(last_msg, 'role') and last_msg.role != 'system':
-                            agent_msg = last_msg.content
-                    
-                    # Исправляем формат - если это массив, берем первый элемент
-                    if isinstance(agent_msg, list):
-                        agent_msg = agent_msg[0] if len(agent_msg) > 0 else ""
+                    logger.info(f"🔍 Found agent message: '{agent_msg[:100]}...' from {len(messages)} total messages")
                     
                     if user_msg and agent_msg:
                         logger.info(f"💾 Context-based turn save - User: '{user_msg[:50]}...', Agent: '{str(agent_msg)[:50]}...'")
