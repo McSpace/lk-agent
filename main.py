@@ -19,6 +19,7 @@ from livekit.agents import (
     vad,
     ConversationItemAddedEvent,
 )
+from livekit.agents.llm.llm import ChatChunk
 from livekit.agents.llm import function_tool
 from livekit.plugins import deepgram, openai, silero, cartesia, google
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
@@ -191,6 +192,8 @@ class Assistant(Agent):
         self.ctx = ctx
         self.turn_counter = 0  # Счетчик ходов для автоматической генерации саммари
         self.pending_user_message = None  # Хранение пользовательского сообщения для событийной модели
+        self.early_save_triggered = False  # Флаг для предотвращения дублирования сохранений
+        self.current_response_chunks = []  # Накопление текста ответа
 
     async def on_enter(self):
         logger.info("🎮 RPG Agent entered the session")
@@ -273,6 +276,62 @@ class Assistant(Agent):
         except Exception as e:
             logger.error(f"❌ Error generating final summary on session end: {e}")
 
+    async def llm_node(self, chat_ctx, tools, model_settings):
+        """Переопределенный llm_node для раннего перехвата ответа агента"""
+        logger.info("🧠 llm_node started - intercepting LLM chunks")
+        
+        # Сбрасываем состояние для нового ответа
+        self.early_save_triggered = False
+        self.current_response_chunks = []
+        is_last_chunk = False
+        
+        # Получаем поток чанков от базового LLM узла
+        async for chunk in Agent.default.llm_node(self, chat_ctx, tools, model_settings):
+            # Передаем чанк дальше в TTS без прерывания потока
+            yield chunk
+            
+            # Накапливаем текст для раннего сохранения
+            if isinstance(chunk, ChatChunk):
+                if chunk.delta:
+                    self.current_response_chunks.append(chunk.delta)
+                    
+                # Проверяем является ли это последним чанком
+                if chunk.usage is not None:
+                    is_last_chunk = True
+                    logger.info("🎯 Last LLM chunk detected via chunk.usage")
+            else:
+                # Для строковых чанков (простые LLM ответы)
+                self.current_response_chunks.append(str(chunk))
+                is_last_chunk = True
+                logger.info("🎯 String chunk received - treating as last")
+                
+            # Если это последний чанк - запускаем раннее сохранение
+            if is_last_chunk and not self.early_save_triggered:
+                self.early_save_triggered = True
+                full_response = ''.join(self.current_response_chunks)
+                logger.info(f"⚡ Early save triggered - response length: {len(full_response)} chars")
+                
+                if self.pending_user_message:
+                    # Запускаем сохранение и генерацию изображения в фоне
+                    import asyncio
+                    asyncio.create_task(self._save_turn_immediately(self.pending_user_message, full_response))
+                    self.pending_user_message = None  # Очищаем чтобы избежать дублирования
+                else:
+                    logger.warning("⚠️ No pending user message for early save")
+                    
+                break  # Выходим из обработки чанков
+        
+        # Если не был обнаружен последний чанк через usage, обрабатываем по завершению потока
+        if not is_last_chunk and not self.early_save_triggered:
+            logger.info("🔄 LLM stream ended without usage marker - fallback save")
+            self.early_save_triggered = True
+            full_response = ''.join(self.current_response_chunks)
+            
+            if self.pending_user_message and full_response:
+                import asyncio
+                asyncio.create_task(self._save_turn_immediately(self.pending_user_message, full_response))
+                self.pending_user_message = None
+
     async def on_user_turn_completed(self, turn_ctx, new_message):
         """Вызывается когда пользователь закончил говорить, до ответа агента"""
         logger.info(f"🎤 User turn completed: {new_message.content}")
@@ -284,10 +343,10 @@ class Assistant(Agent):
         elif isinstance(user_content, list):
             user_content = ""
             
-        # Сохраняем для использования в conversation_item_added event
+        # Сохраняем для использования в llm_node
         self.pending_user_message = str(user_content)
-        logger.info(f"💬 User message stored for event-based saving: '{self.pending_user_message[:100]}...'")
-        logger.info("⏳ Waiting for conversation_item_added event with agent response...")
+        logger.info(f"💬 User message stored for llm_node early capture: '{self.pending_user_message[:100]}...'")
+        logger.info("⏳ Waiting for llm_node to capture complete response...")
         
     async def _save_turn_immediately(self, user_message: str, agent_message: str):
         """Немедленное сохранение хода с точными данными из conversation_item_added событий"""
@@ -589,51 +648,11 @@ async def entrypoint(ctx: JobContext):
     # def on_stt_finished():
     #     logger.info("📝 STT finished processing")
 
-    @session.on("conversation_item_added")
-    def on_conversation_item_added(event: ConversationItemAddedEvent):
-        """Событийный обработчик для точного отслеживания завершения ответа агента"""
-        try:
-            item = event.item
-            # Безопасное получение содержимого для логирования
-            try:
-                content_preview = item.text_content() if callable(item.text_content) else item.text_content
-                content_preview = str(content_preview)[:100] if content_preview else "empty"
-            except:
-                content_preview = str(item.content)[:100] if hasattr(item, 'content') else "unknown"
-            
-            logger.info(f"🎯 conversation_item_added: role={item.role}, content='{content_preview}...'")
-            
-            if item.role == "user":
-                # Пользовательское сообщение добавлено в контекст
-                logger.info("👤 User message added to conversation context")
-                
-            elif item.role == "assistant":
-                # Агент завершил генерацию ответа!
-                if assistant.pending_user_message:
-                    # Проверяем какой формат у text_content - свойство или метод
-                    try:
-                        agent_response = item.text_content() if callable(item.text_content) else item.text_content
-                    except Exception as e:
-                        logger.warning(f"⚠️ Error getting text_content: {e}, trying fallback")
-                        agent_response = str(item.content) if hasattr(item, 'content') else str(item)
-                    
-                    user_message = assistant.pending_user_message
-                    
-                    logger.info(f"🤖 Agent response completed! Saving turn:")
-                    logger.info(f"  👤 User: '{user_message[:50]}...'")
-                    logger.info(f"  🤖 Agent: '{agent_response[:50]}...'")
-                    
-                    # Сохраняем ход немедленно - агент точно завершил ответ
-                    import asyncio
-                    asyncio.create_task(assistant._save_turn_immediately(user_message, agent_response))
-                    
-                    # Очищаем pending сообщение
-                    assistant.pending_user_message = None
-                else:
-                    logger.warning("⚠️ Agent response received but no pending user message")
-                    
-        except Exception as e:
-            logger.error(f"❌ Error in conversation_item_added handler: {e}")
+    # Убираем старый обработчик conversation_item_added - теперь используем llm_node для раннего перехвата
+    # @session.on("conversation_item_added")
+    # def on_conversation_item_added(event: ConversationItemAddedEvent):
+    #     """Старый событийный обработчик - заменен на llm_node перехват"""
+    #     logger.info("🔍 conversation_item_added event (replaced by llm_node early capture)")
 
     # Переменные для отслеживания состояния агента
     assistant.turn_counter = 0
