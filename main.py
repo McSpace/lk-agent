@@ -191,9 +191,8 @@ class Assistant(Agent):
         self.game_data = game_data
         self.ctx = ctx
         self.turn_counter = 0  # Счетчик ходов для автоматической генерации саммари
-        self.pending_user_message = None  # Хранение пользовательского сообщения для событийной модели
+        self.pending_user_message = None  # Хранение пользовательского сообщения для раннего сохранения
         self.early_save_triggered = False  # Флаг для предотвращения дублирования сохранений
-        self.current_response_chunks = []  # Накопление текста ответа
 
     async def on_enter(self):
         logger.info("🎮 RPG Agent entered the session")
@@ -280,8 +279,8 @@ class Assistant(Agent):
         """Переопределенный llm_node для раннего перехвата ответа агента"""
         logger.info("🧠 llm_node started - intercepting LLM chunks")
         
-        # Накапливаем ВСЕ чанки от всех вызовов llm_node
-        local_chunks = []
+        # Простое накопление чанков текущего вызова
+        current_response_chunks = []
         is_last_chunk = False
         
         # Получаем поток чанков от базового LLM узла
@@ -292,7 +291,7 @@ class Assistant(Agent):
             # Накапливаем текст для раннего сохранения
             if isinstance(chunk, ChatChunk):
                 if chunk.delta:
-                    local_chunks.append(chunk.delta)
+                    current_response_chunks.append(chunk.delta)
                     
                 # Проверяем является ли это последним чанком
                 if chunk.usage is not None:
@@ -300,44 +299,25 @@ class Assistant(Agent):
                     logger.info("🎯 Last LLM chunk detected via chunk.usage")
             else:
                 # Для строковых чанков (простые LLM ответы)
-                local_chunks.append(str(chunk))
+                current_response_chunks.append(str(chunk))
                 is_last_chunk = True
                 logger.info("🎯 String chunk received - treating as last")
         
-        # Добавляем текст этого вызова к общему накопителю
-        local_response = ''.join(local_chunks)
-        logger.info(f"📝 llm_node completed, local response: '{local_response[:100]}...'")
+        # Получаем полный ответ этого вызова
+        full_response = ''.join(current_response_chunks)
+        logger.info(f"📝 llm_node completed - response: '{full_response[:100]}...' (length: {len(full_response)})")
         
-        if not hasattr(self, 'accumulated_response'):
-            self.accumulated_response = ""
-        self.accumulated_response += local_response
-        
-        # Если это был последний чанк этого вызова - планируем проверку завершения
-        logger.info(f"🔍 End of llm_node: is_last_chunk={is_last_chunk}, local_response_len={len(local_response)}")
-        if is_last_chunk:
-            logger.info("🔍 Scheduling completion check...")
-            import asyncio
-            asyncio.create_task(self._check_completion_delayed())
-        else:
-            logger.warning("⚠️ is_last_chunk is False - no completion check scheduled")
-
-    async def _check_completion_delayed(self):
-        """Отложенная проверка завершения всех llm_node вызовов"""
-        logger.info("🕒 _check_completion_delayed started")
-        # Ждем паузу чтобы убедиться что нет новых вызовов
-        await asyncio.sleep(0.3)
-        
-        logger.info(f"🔍 Check conditions: pending_user_message={bool(self.pending_user_message)}, early_save_triggered={self.early_save_triggered}")
-        if self.pending_user_message and not self.early_save_triggered:
+        # Если это последний чанк И у нас есть pending user message - сохраняем сразу
+        if is_last_chunk and self.pending_user_message and not self.early_save_triggered:
             self.early_save_triggered = True
-            full_response = self.accumulated_response
-            logger.info(f"⚡ Final save triggered - accumulated response length: {len(full_response)} chars")
+            logger.info(f"📄 Full agent response: {full_response}")
+            logger.info("⚡ Immediate save triggered - calling _save_turn_immediately")
             
-            # Запускаем сохранение и генерацию изображения в фоне
+            # Запускаем сохранение и генерацию изображения немедленно
             import asyncio
             asyncio.create_task(self._save_turn_immediately(self.pending_user_message, full_response))
-            self.pending_user_message = None
-            self.accumulated_response = ""  # Сбрасываем для следующего хода
+            self.pending_user_message = None  # Очищаем чтобы избежать дублирования
+
 
     async def on_user_turn_completed(self, turn_ctx, new_message):
         """Вызывается когда пользователь закончил говорить, до ответа агента"""
@@ -353,7 +333,6 @@ class Assistant(Agent):
         # Сохраняем для использования в llm_node
         self.pending_user_message = str(user_content)
         self.early_save_triggered = False  # Сбрасываем флаг для нового хода
-        self.accumulated_response = ""  # Сбрасываем накопитель
         logger.info(f"💬 User message stored for llm_node early capture: '{self.pending_user_message[:100]}...'")
         logger.info("⏳ Waiting for llm_node to capture complete response...")
         
