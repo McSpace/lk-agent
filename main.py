@@ -347,15 +347,18 @@ class Assistant(Agent):
             
             # Модифицируем chat_ctx для включения языковой инструкции
             from livekit.agents import llm
-            updated_messages = [llm.ChatMessage.create(text=language_instruction, role="system")]
+            
+            # Создаем новый контекст с языковой инструкцией
+            new_chat_ctx = llm.ChatContext()
+            new_chat_ctx.append(role="system", text=language_instruction)
             
             # Добавляем существующие сообщения, исключая старые системные
             for msg in chat_ctx.messages:
                 if msg.role != "system":
-                    updated_messages.append(msg)
+                    new_chat_ctx.append(role=msg.role, text=msg.content)
             
-            # Создаем новый контекст с обновленными сообщениями
-            chat_ctx.messages = updated_messages
+            # Заменяем контекст
+            chat_ctx = new_chat_ctx
             logger.info(f"📝 Added language instruction: {language_instruction}")
             
             # Простое накопление чанков текущего вызова
