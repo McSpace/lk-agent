@@ -299,7 +299,7 @@ class Assistant(Agent):
                 if isinstance(chunk, ChatChunk):
                     if chunk.delta:
                         current_response_chunks.append(chunk.delta)
-                        logger.info(f"📝 Added delta: '{chunk.delta[:50]}...'")
+                        logger.info(f"📝 Added delta: '{str(chunk.delta)[:50]}...'")
                         
                     # Проверяем является ли это последним чанком
                     if chunk.usage is not None:
