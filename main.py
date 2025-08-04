@@ -313,16 +313,21 @@ class Assistant(Agent):
         self.accumulated_response += local_response
         
         # Если это был последний чанк этого вызова - планируем проверку завершения
+        logger.info(f"🔍 End of llm_node: is_last_chunk={is_last_chunk}, local_response_len={len(local_response)}")
         if is_last_chunk:
             logger.info("🔍 Scheduling completion check...")
             import asyncio
             asyncio.create_task(self._check_completion_delayed())
+        else:
+            logger.warning("⚠️ is_last_chunk is False - no completion check scheduled")
 
     async def _check_completion_delayed(self):
         """Отложенная проверка завершения всех llm_node вызовов"""
+        logger.info("🕒 _check_completion_delayed started")
         # Ждем паузу чтобы убедиться что нет новых вызовов
         await asyncio.sleep(0.3)
         
+        logger.info(f"🔍 Check conditions: pending_user_message={bool(self.pending_user_message)}, early_save_triggered={self.early_save_triggered}")
         if self.pending_user_message and not self.early_save_triggered:
             self.early_save_triggered = True
             full_response = self.accumulated_response
