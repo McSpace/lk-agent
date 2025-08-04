@@ -298,8 +298,16 @@ class Assistant(Agent):
                 # Накапливаем текст для раннего сохранения
                 if isinstance(chunk, ChatChunk):
                     if chunk.delta:
-                        current_response_chunks.append(chunk.delta)
-                        logger.info(f"📝 Added delta: '{str(chunk.delta)[:50]}...'")
+                        # Извлекаем текст из ChoiceDelta объекта
+                        delta_text = ""
+                        if hasattr(chunk.delta, 'content') and chunk.delta.content:
+                            delta_text = chunk.delta.content
+                        
+                        if delta_text:
+                            current_response_chunks.append(delta_text)
+                            logger.info(f"📝 Added delta text: '{delta_text[:50]}...'")
+                        else:
+                            logger.info(f"📝 No content in delta: {type(chunk.delta)}")
                         
                     # Проверяем является ли это последним чанком
                     if chunk.usage is not None:
