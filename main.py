@@ -278,45 +278,71 @@ class Assistant(Agent):
     async def llm_node(self, chat_ctx, tools, model_settings):
         """Переопределенный llm_node для раннего перехвата ответа агента"""
         logger.info("🧠 llm_node started - intercepting LLM chunks")
+        logger.info(f"🔍 Initial state: pending_user_message={bool(self.pending_user_message)}, early_save_triggered={self.early_save_triggered}")
         
-        # Простое накопление чанков текущего вызова
-        current_response_chunks = []
-        is_last_chunk = False
-        
-        # Получаем поток чанков от базового LLM узла
-        async for chunk in Agent.default.llm_node(self, chat_ctx, tools, model_settings):
-            # Передаем чанк дальше в TTS без прерывания потока
-            yield chunk
+        try:
+            # Простое накопление чанков текущего вызова
+            current_response_chunks = []
+            is_last_chunk = False
+            chunk_count = 0
             
-            # Накапливаем текст для раннего сохранения
-            if isinstance(chunk, ChatChunk):
-                if chunk.delta:
-                    current_response_chunks.append(chunk.delta)
-                    
-                # Проверяем является ли это последним чанком
-                if chunk.usage is not None:
+            logger.info("🔄 Starting chunk iteration...")
+            # Получаем поток чанков от базового LLM узла
+            async for chunk in Agent.default.llm_node(self, chat_ctx, tools, model_settings):
+                chunk_count += 1
+                logger.info(f"📦 Processing chunk #{chunk_count}: type={type(chunk).__name__}")
+                
+                # Передаем чанк дальше в TTS без прерывания потока
+                yield chunk
+                
+                # Накапливаем текст для раннего сохранения
+                if isinstance(chunk, ChatChunk):
+                    if chunk.delta:
+                        current_response_chunks.append(chunk.delta)
+                        logger.info(f"📝 Added delta: '{chunk.delta[:50]}...'")
+                        
+                    # Проверяем является ли это последним чанком
+                    if chunk.usage is not None:
+                        is_last_chunk = True
+                        logger.info("🎯 Last LLM chunk detected via chunk.usage")
+                        logger.info(f"📊 Usage info: {chunk.usage}")
+                else:
+                    # Для строковых чанков (простые LLM ответы)
+                    current_response_chunks.append(str(chunk))
                     is_last_chunk = True
-                    logger.info("🎯 Last LLM chunk detected via chunk.usage")
-            else:
-                # Для строковых чанков (простые LLM ответы)
-                current_response_chunks.append(str(chunk))
-                is_last_chunk = True
-                logger.info("🎯 String chunk received - treating as last")
-        
-        # Получаем полный ответ этого вызова
-        full_response = ''.join(current_response_chunks)
-        logger.info(f"📝 llm_node completed - response: '{full_response[:100]}...' (length: {len(full_response)})")
-        
-        # Если это последний чанк И у нас есть pending user message - сохраняем сразу
-        if is_last_chunk and self.pending_user_message and not self.early_save_triggered:
-            self.early_save_triggered = True
-            logger.info(f"📄 Full agent response: {full_response}")
-            logger.info("⚡ Immediate save triggered - calling _save_turn_immediately")
+                    logger.info(f"🎯 String chunk received - treating as last: '{str(chunk)[:50]}...'")
             
-            # Запускаем сохранение и генерацию изображения немедленно
-            import asyncio
-            asyncio.create_task(self._save_turn_immediately(self.pending_user_message, full_response))
-            self.pending_user_message = None  # Очищаем чтобы избежать дублирования
+            logger.info(f"✅ Chunk iteration completed. Total chunks: {chunk_count}")
+            
+            # Получаем полный ответ этого вызова
+            full_response = ''.join(current_response_chunks)
+            logger.info(f"📝 llm_node completed - response: '{full_response[:100]}...' (length: {len(full_response)})")
+            
+            # Логируем все условия для сохранения
+            logger.info(f"🔍 Save conditions check:")
+            logger.info(f"  is_last_chunk: {is_last_chunk}")
+            logger.info(f"  pending_user_message: {bool(self.pending_user_message)}")
+            logger.info(f"  early_save_triggered: {self.early_save_triggered}")
+            
+            # Если это последний чанк И у нас есть pending user message - сохраняем сразу
+            if is_last_chunk and self.pending_user_message and not self.early_save_triggered:
+                self.early_save_triggered = True
+                logger.info(f"📄 Full agent response: {full_response}")
+                logger.info("⚡ Immediate save triggered - calling _save_turn_immediately")
+                
+                # Запускаем сохранение и генерацию изображения немедленно
+                import asyncio
+                asyncio.create_task(self._save_turn_immediately(self.pending_user_message, full_response))
+                self.pending_user_message = None  # Очищаем чтобы избежать дублирования
+            else:
+                logger.info("⏭️ Save conditions not met - skipping save")
+                
+        except Exception as e:
+            logger.error(f"❌ Exception in llm_node: {e}")
+            logger.error(f"📍 Exception details: {type(e).__name__}: {str(e)}")
+            import traceback
+            logger.error(f"🔍 Traceback: {traceback.format_exc()}")
+            raise
 
 
     async def on_user_turn_completed(self, turn_ctx, new_message):
@@ -351,50 +377,42 @@ class Assistant(Agent):
 
     # Старые методы с задержками удалены - используем событийную модель
 
-    @function_tool
-    async def roll_dice(self, context: RunContext, sides: int = 20):
-        """
-        Бросает игральную кость для определения результата действий.
-        
-        Args:
-            sides: Количество граней на кости (по умолчанию 20)
-        """
-        import random
-        result = random.randint(1, sides)
-        logger.info(f"🎲 Dice roll: {result} (d{sides})")
-        
-        # Убираем дополнительные сохранения из function tools - основное сохранение происходит в on_user_turn_completed
-        # await self._trigger_turn_save_and_image("dice roll action")
-        
-        return f"Результат броска d{sides}: {result}"
+    # Временно отключаем function tools для диагностики
+    # @function_tool
+    # async def roll_dice(self, context: RunContext, sides: int = 20):
+    #     """
+    #     Бросает игральную кость для определения результата действий.
+    #     
+    #     Args:
+    #         sides: Количество граней на кости (по умолчанию 20)
+    #     """
+    #     import random
+    #     result = random.randint(1, sides)
+    #     logger.info(f"🎲 Dice roll: {result} (d{sides})")
+    #     
+    #     return f"Результат броска d{sides}: {result}"
 
-    @function_tool 
-    async def check_inventory(self, context: RunContext):
-        """
-        Показывает инвентарь игрока.
-        """
-        logger.info("🎒 Checking player inventory")
-        
-        # Убираем дополнительные сохранения из function tools
-        # await self._trigger_turn_save_and_image("inventory check")
-        
-        return "В вашем инвентаре: меч, зелье лечения, 50 золотых монет, факел"
+    # @function_tool 
+    # async def check_inventory(self, context: RunContext):
+    #     """
+    #     Показывает инвентарь игрока.
+    #     """
+    #     logger.info("🎒 Checking player inventory")
+    #     
+    #     return "В вашем инвентаре: меч, зелье лечения, 50 золотых монет, факел"
 
-    @function_tool
-    async def save_game_state(self, context: RunContext, action_description: str):
-        """
-        Сохраняет текущее состояние игры и действие игрока.
-        
-        Args:
-            action_description: Описание действия игрока
-        """
-        logger.info(f"💾 Saving game state: {action_description[:50]}...")
-        
-        # Убираем дублирующие сохранения из function tools - основное сохранение происходит в on_user_turn_completed
-        # Сохранение и генерация картинки будут выполнены автоматически после завершения ответа агента
-        logger.info("🛠️ Function tool executed - turn will be saved by main handler")
-            
-        return f"Действие '{action_description}' сохранено в истории игры"
+    # @function_tool
+    # async def save_game_state(self, context: RunContext, action_description: str):
+    #     """
+    #     Сохраняет текущее состояние игры и действие игрока.
+    #     
+    #     Args:
+    #         action_description: Описание действия игрока
+    #     """
+    #     logger.info(f"💾 Saving game state: {action_description[:50]}...")
+    #     logger.info("🛠️ Function tool executed - turn will be saved by main handler")
+    #         
+    #     return f"Действие '{action_description}' сохранено в истории игры"
 
     async def handle_imagegen_api(self, gm_text, last_turn_id, user_text):
         """Фоновая обработка генерации и отправки картинки"""
