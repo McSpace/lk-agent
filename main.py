@@ -1,4 +1,5 @@
 import asyncio
+import json
 from typing import AsyncIterable
 from aiofile import async_open as open
 from datetime import datetime
@@ -31,6 +32,8 @@ from uuid import UUID
 from pydantic import BaseModel
 from typing import Dict, Optional
 
+from voice_factory import VoiceComponentFactory
+
 load_dotenv()
 
 logger = logging.getLogger("rpg-agent")
@@ -48,6 +51,10 @@ class Game(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+
+class UserVoiceSettings(BaseModel):
+    language: str = "en"
+    speech_speed: float = 1.0
 
 class GameSummary(BaseModel):
     id: UUID
@@ -164,7 +171,10 @@ async def save_next_turn_api(user_text: str, gm_text: str, game_id: str, image_u
 
 
 class Assistant(Agent):
-    def __init__(self, game_data: GameData, ctx: JobContext, user_lang: str):
+    def __init__(self, game_data: GameData, ctx: JobContext, user_settings: UserVoiceSettings):
+        # Получаем язык из настроек пользователя
+        user_lang = self._get_language_name(user_settings.language)
+        
         # Формируем инструкции с учетом истории игры
         instructions = f"""
         Ты ведущий текстовой ролевой игры.
@@ -174,7 +184,6 @@ class Assistant(Agent):
         У тебя есть доступ к игровым инструментам:
         - roll_dice: для броска костей при проверках
         - check_inventory: для проверки инвентаря игрока
-        - save_game_state: для сохранения важных моментов игры
         
         Используй эти инструменты когда игрок пытается выполнить действия требующие проверок.
 
@@ -193,6 +202,34 @@ class Assistant(Agent):
         self.turn_counter = 0  # Счетчик ходов для автоматической генерации саммари
         self.pending_user_message = None  # Хранение пользовательского сообщения для раннего сохранения
         self.early_save_triggered = False  # Флаг для предотвращения дублирования сохранений
+        
+        # Настройки голоса пользователя
+        self.voice_settings = user_settings
+        logger.info(f"🎛️ Voice settings initialized: language='{self.voice_settings.language}', speed={self.voice_settings.speech_speed}")
+
+    def _get_language_name(self, lang_code: str) -> str:
+        """Получить полное название языка по коду"""
+        lang_names = {
+            "en": "English",
+            "ru": "Russian", 
+            "nl": "Dutch",
+            "fr": "French",
+            "es": "Spanish"
+        }
+        return lang_names.get(lang_code, "English")
+
+    async def update_voice_settings(self, language: str, speech_speed: float):
+        """Обновить настройки голоса в runtime"""
+        logger.info(f"🔄 Updating voice settings: {language}, speed={speech_speed}")
+        
+        # Валидируем настройки через фабрику
+        validated_language, validated_speed = VoiceComponentFactory.validate_settings(language, speech_speed)
+        
+        # Обновляем настройки
+        self.voice_settings.language = validated_language
+        self.voice_settings.speech_speed = validated_speed
+        
+        logger.info(f"✅ Voice settings updated: language='{self.voice_settings.language}', speed={self.voice_settings.speech_speed}")
 
     async def on_enter(self):
         logger.info("🎮 RPG Agent entered the session")
@@ -275,12 +312,52 @@ class Assistant(Agent):
         except Exception as e:
             logger.error(f"❌ Error generating final summary on session end: {e}")
 
-    async def llm_node(self, chat_ctx, tools, model_settings):
-        """Переопределенный llm_node для раннего перехвата ответа агента"""
-        logger.info("🧠 llm_node started - intercepting LLM chunks")
-        logger.info(f"🔍 Initial state: pending_user_message={bool(self.pending_user_message)}, early_save_triggered={self.early_save_triggered}")
+    async def tts_node(self, text, model_settings):
+        """Переопределенный tts_node для использования фабрики голосовых компонентов"""
+        logger.info(f"🔊 tts_node called with language='{self.voice_settings.language}', speed={self.voice_settings.speech_speed}")
         
         try:
+            # Создаем TTS компонент с текущими настройками через фабрику
+            current_tts = VoiceComponentFactory.create_tts(
+                self.voice_settings.language, 
+                self.voice_settings.speech_speed
+            )
+            
+            # Используем созданный TTS компонент для синтеза
+            async for frame in current_tts.synthesize(text):
+                yield frame
+                
+        except Exception as e:
+            logger.error(f"❌ TTS node error: {e}")
+            # Fallback на дефолтный TTS
+            logger.info("🔄 Falling back to default TTS")
+            async for frame in Agent.default.tts_node(self, text, model_settings):
+                yield frame
+
+    async def llm_node(self, chat_ctx, tools, model_settings):
+        """Переопределенный llm_node для раннего перехвата ответа агента и обновления языка"""
+        logger.info("🧠 llm_node started - intercepting LLM chunks")
+        logger.info(f"🔍 Initial state: pending_user_message={bool(self.pending_user_message)}, early_save_triggered={self.early_save_triggered}")
+        logger.info(f"🌐 Current language: {self.voice_settings.language}")
+        
+        try:
+            # Добавляем простую языковую инструкцию перед вызовом LLM
+            current_lang = self._get_language_name(self.voice_settings.language)
+            language_instruction = f"Отвечай на '{current_lang}' языке кратко, но увлекательно."
+            
+            # Модифицируем chat_ctx для включения языковой инструкции
+            from livekit.agents.llm import ChatMessage
+            updated_messages = [ChatMessage.create(text=language_instruction, role="system")]
+            
+            # Добавляем существующие сообщения, исключая старые системные
+            for msg in chat_ctx.messages:
+                if msg.role != "system":
+                    updated_messages.append(msg)
+            
+            # Создаем новый контекст с обновленными сообщениями
+            chat_ctx.messages = updated_messages
+            logger.info(f"📝 Added language instruction: {language_instruction}")
+            
             # Простое накопление чанков текущего вызова
             current_response_chunks = []
             is_last_chunk = False
@@ -548,17 +625,14 @@ async def entrypoint(ctx: JobContext):
     game_id = ctx.room.name
     game_data = await get_game_data(game_id)
 
-    user_lang_code = "en"
-    user_lang = "English"
+    # Создаем дефолтные настройки пользователя на основе данных игры
+    user_voice_settings = UserVoiceSettings()
     if game_data:
-        if game_data.user_lang == "ru":
-            user_lang = "Russian"
-            user_lang_code = "ru"
-        elif game_data.user_lang == "nl":
-            user_lang = "Dutch"
-            user_lang_code = "nl"
-
-    assistant = Assistant(game_data, ctx, user_lang)
+        # Используем язык из данных игры как дефолтный
+        user_voice_settings.language = game_data.user_lang if game_data.user_lang in VoiceComponentFactory.get_supported_languages() else "en"
+        logger.info(f"🌐 Language from game data: {user_voice_settings.language}")
+    
+    assistant = Assistant(game_data, ctx, user_voice_settings)
 
     try:
         session = AgentSession(
@@ -668,6 +742,49 @@ async def entrypoint(ctx: JobContext):
     #     """Старый событийный обработчик - заменен на llm_node перехват"""
     #     logger.info("🔍 conversation_item_added event (replaced by llm_node early capture)")
 
+    # DataChannel обработчик для получения настроек от фронтенда
+    @ctx.room.on("data_received")
+    def on_data_received(data):
+        """Обработка DataChannel сообщений от фронтенда"""
+        try:
+            # Декодируем JSON данные
+            message = json.loads(data.data.decode('utf-8'))
+            logger.info(f"📡 DataChannel message received: {message}")
+            
+            # Обрабатываем обновление настроек голоса
+            if message.get("type") == "voice_settings_update":
+                new_language = message.get("language")
+                new_speed = message.get("speech_speed")
+                
+                if new_language or new_speed:
+                    # Обновляем настройки через assistant
+                    current_language = assistant.voice_settings.language if new_language is None else new_language
+                    current_speed = assistant.voice_settings.speech_speed if new_speed is None else new_speed
+                    
+                    logger.info(f"🔄 Voice settings update request: language={current_language}, speed={current_speed}")
+                    asyncio.create_task(assistant.update_voice_settings(current_language, current_speed))
+                    
+                    # Отправляем подтверждение обратно на фронтенд
+                    confirmation = {
+                        "type": "voice_settings_updated",
+                        "language": current_language,
+                        "speech_speed": current_speed,
+                        "status": "success"
+                    }
+                    asyncio.create_task(
+                        ctx.room.local_participant.publish_data(
+                            json.dumps(confirmation).encode('utf-8'),
+                            reliable=True,
+                            topic="voice_settings_response"
+                        )
+                    )
+                    logger.info(f"✅ Voice settings confirmation sent: {confirmation}")
+                    
+        except json.JSONDecodeError:
+            logger.error("❌ Failed to decode DataChannel JSON message")
+        except Exception as e:
+            logger.error(f"❌ DataChannel message processing error: {e}")
+
     # Переменные для отслеживания состояния агента
     assistant.turn_counter = 0
 
@@ -678,9 +795,8 @@ async def entrypoint(ctx: JobContext):
     
     ctx.add_shutdown_callback(on_session_shutdown)
 
-    logger.info(f"Starting agent session with language: {user_lang} ({user_lang_code})")
-    logger.info(f"STT language: {user_lang_code}")
-    logger.info(f"TTS settings: speed={0.5 if user_lang_code == 'ru' else 1.0}")
+    logger.info(f"Starting agent session with language: {assistant.voice_settings.language}")
+    logger.info(f"Voice settings: language='{assistant.voice_settings.language}', speed={assistant.voice_settings.speech_speed}")
     
     try:
         await session.start(agent=assistant, room=ctx.room)
