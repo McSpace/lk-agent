@@ -346,8 +346,8 @@ class Assistant(Agent):
             language_instruction = f"Отвечай на '{current_lang}' языке кратко, но увлекательно."
             
             # Модифицируем chat_ctx для включения языковой инструкции
-            from livekit.agents.llm import ChatMessage
-            updated_messages = [ChatMessage.create(text=language_instruction, role="system")]
+            from livekit.agents import llm
+            updated_messages = [llm.ChatMessage.create(text=language_instruction, role="system")]
             
             # Добавляем существующие сообщения, исключая старые системные
             for msg in chat_ctx.messages:
