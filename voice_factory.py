@@ -27,32 +27,53 @@ class VoiceComponentFactory:
         logger.info(f"Creating TTS for language: {language}, speed: {speed}")
         
         if language == "en":
-            return openai.TTS(
-                model="tts-1",
-                voice="ash",  # Лучший голос для английского
-                speed=speed
-            )
+            return elevenlabs.TTS(
+                model="eleven_v3",
+                voice="8JVbfL6oEdmuxKn5DK2C"  # Специальный EN голос
+            )  
+            # return openai.TTS(
+            #     model="tts-1",
+            #     voice="ash",  # Лучший голос для английского
+            #     speed=speed
+            # )
+            
         elif language == "ru":
-            return cartesia.TTS(
-                voice="a8a1eb38-5f15-4c1d-8722-7ac0f329727d",  # Русский голос Cartesia
-                speed=speed
-            )
+            # return cartesia.TTS(
+            #     language="ru",
+            #     model="sonic-2",
+            #     voice="da05e96d-ca10-4220-9042-d8acef654fa9"  # Русский голос Cartesia
+            # )
+            return elevenlabs.TTS(
+                model="eleven_v3",
+                voice="8JVbfL6oEdmuxKn5DK2C"  # Специальный RU голос
+            )             
         elif language == "nl":
-            return elevenlabs.TTS(
-                voice="dutch_female_voice_id",  # Специальный голландский голос
-                speed=speed
+            # return elevenlabs.TTS(
+            #     voice="dutch_female_voice_id"  # Специальный голландский голос
+            # )
+            return cartesia.TTS(
+                language="nl",
+                model="sonic-2",
+                voice="9e8db62d-056f-47f3-b3b6-1b05767f9176"  # Голос Cartesia для голландского
             )
+
         elif language == "fr":
-            return openai.TTS(
-                model="tts-1",
-                voice="nova",  # Лучший для французского
-                speed=speed
-            )
+            return cartesia.TTS(
+                language="fr",
+                model="sonic-2",
+                voice="5c3c89e5-535f-43ef-b14d-f8ffe148c1f0"  # Голос ESP для французского
+            )            
+            # return openai.TTS(
+            #     model="tts-1",
+            #     voice="nova",  # Лучший для французского
+            #     speed=speed
+            # )
         elif language == "es":
-            return elevenlabs.TTS(
-                voice="spanish_male_voice_id",  # Испанский голос
-                speed=speed
-            )
+            return cartesia.TTS(
+                language="es",
+                model="sonic-2",
+                voice="2695b6b5-5543-4be1-96d9-3967fb5e7fec"  # Голос ESP для голландского
+            )            
         else:
             # Fallback на английский
             logger.warning(f"Unknown language {language}, falling back to English")

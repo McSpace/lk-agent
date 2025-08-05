@@ -344,22 +344,10 @@ class Assistant(Agent):
             # Добавляем простую языковую инструкцию перед вызовом LLM
             current_lang = self._get_language_name(self.voice_settings.language)
             language_instruction = f"Отвечай на '{current_lang}' языке кратко, но увлекательно."
+            logger.info(f"📝 Language instruction: {language_instruction}")
             
-            # Модифицируем chat_ctx для включения языковой инструкции
-            from livekit.agents import llm
-            
-            # Создаем новый контекст с языковой инструкцией
-            new_chat_ctx = llm.ChatContext()
-            new_chat_ctx.append(role="system", text=language_instruction)
-            
-            # Добавляем существующие сообщения, исключая старые системные
-            for msg in chat_ctx.messages:
-                if msg.role != "system":
-                    new_chat_ctx.append(role=msg.role, text=msg.content)
-            
-            # Заменяем контекст
-            chat_ctx = new_chat_ctx
-            logger.info(f"📝 Added language instruction: {language_instruction}")
+            # Простое добавление языковой инструкции в начало контекста
+            # Временно удаляем сложную логику модификации контекста
             
             # Простое накопление чанков текущего вызова
             current_response_chunks = []

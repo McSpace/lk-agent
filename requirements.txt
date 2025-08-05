@@ -1,5 +1,7 @@
 # requirements.in
 livekit-agents>=1.0.11
+livekit-agents[cartesia]~=1.0
+livekit-agents[elevenlabs]~=1.0
 livekit-plugins-openai
 livekit-plugins-elevenlabs
 livekit-plugins-cartesia
