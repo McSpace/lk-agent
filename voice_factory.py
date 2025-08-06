@@ -59,7 +59,7 @@ class VoiceComponentFactory:
                         style=0.0,
                         use_speaker_boost=True
                     )
-                ),          
+                )          
         elif language == "nl":
             # return elevenlabs.TTS(
             #     voice="dutch_female_voice_id"  # Специальный голландский голос
