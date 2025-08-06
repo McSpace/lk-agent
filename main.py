@@ -248,17 +248,10 @@ class Assistant(Agent):
         else:
             logger.info(f"📢 Prepared intro greeting for new game: {greeting[:100]}...")
             
-        # Отправляем приветствие/саммори через session.say()
-        try:
-            logger.info(f"🔍 Checking session availability: {hasattr(self, 'session')}")
-            if hasattr(self, 'session') and self.session:
-                await self.session.say(greeting)
-                logger.info("🔊 Greeting/Summary played via session.say()")
-            else:
-                logger.warning("⚠️ Session not available in on_enter, skipping TTS playback")
-        except Exception as e:
-            logger.error(f"❌ Error in on_enter TTS playback: {e}")
-            logger.info("🎯 Continuing without TTS playback...")
+        # Приветствие будет отправлено после session.start() через session.say()
+        # Сохраняем текст для использования после старта сессии
+        self.greeting_text = greeting
+        logger.info("💬 Greeting prepared for post-session-start delivery")
             
     async def _send_latest_image_to_frontend(self):
         """Отправляет последнюю картинку на фронтенд при старте сессии"""
@@ -636,6 +629,7 @@ async def entrypoint(ctx: JobContext):
             max_endpointing_delay=8.0,  # Увеличено с 6.0 до 8.0 сек
         )
         logger.info("AgentSession created with turn detection config: min_delay=1.2s, max_delay=8.0s")
+        
     except Exception as e:
         logger.error(f"Failed to create AgentSession: {e}")
         return
@@ -792,6 +786,15 @@ async def entrypoint(ctx: JobContext):
     try:
         await session.start(agent=assistant, room=ctx.room)
         logger.info("✅ Agent session started successfully")
+        
+        # Отправляем приветствие после успешного старта сессии
+        if hasattr(assistant, 'greeting_text') and assistant.greeting_text:
+            try:
+                logger.info("🔊 Sending greeting via session.say()")
+                await session.say(assistant.greeting_text)
+                logger.info("✅ Greeting delivered successfully")
+            except Exception as greeting_error:
+                logger.error(f"❌ Failed to send greeting: {greeting_error}")
         
     except Exception as e:
         logger.error(f"Failed to start agent session: {e}")

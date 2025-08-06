@@ -29,7 +29,7 @@ class VoiceComponentFactory:
         if language == "en":
             return elevenlabs.TTS(
                 model="eleven_v3",
-                voice="8JVbfL6oEdmuxKn5DK2C"  # Специальный EN голос
+                voice_id="8JVbfL6oEdmuxKn5DK2C"  # Специальный EN голос
             )  
             # return openai.TTS(
             #     model="tts-1",
@@ -45,7 +45,7 @@ class VoiceComponentFactory:
             # )
             return elevenlabs.TTS(
                 model="eleven_v3",
-                voice="8JVbfL6oEdmuxKn5DK2C"  # Специальный RU голос
+                voice_id="8JVbfL6oEdmuxKn5DK2C"  # Специальный RU голос
             )             
         elif language == "nl":
             # return elevenlabs.TTS(
