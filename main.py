@@ -646,6 +646,14 @@ async def entrypoint(ctx: JobContext):
         logger.error(f"Failed to create AgentSession: {e}")
         return
 
+    @session.on("error")
+    def on_error(event):
+        logger.error(f"Session error: {event.error}")
+        logger.error(f"Error source: {event.source}")
+        logger.error(f"Is recoverable: {event.error.recoverable}")
+        if not event.error.recoverable:
+            logger.error("Unrecoverable error detected")
+
     @session.on("user_state_changed")
     def on_user_state_changed(ev):
         logger.info(f"User state changed: {ev.old_state} -> {ev.new_state}")
