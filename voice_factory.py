@@ -28,21 +28,21 @@ class VoiceComponentFactory:
         logger.info(f"Creating TTS for language: {language}, speed: {speed}")
         
         if language == "en":
-            return elevenlabs.TTS(
-                model="eleven_multilingual_v2",
-                voice_id="wXKeh4OrqzO6TjKQTRdw",  # Специальный EN голос
+            # return elevenlabs.TTS(
+                # model="eleven_multilingual_v2",
+                # voice_id="wXKeh4OrqzO6TjKQTRdw",  # Специальный EN голос
             #     voice_settings=VoiceSettings(
             #             stability=0.40,
             #             similarity_boost=0.50,
             #             style=0.0,
             #             use_speaker_boost=True
             #         )
-            )  
-            # return openai.TTS(
-            #     model="tts-1",
-            #     voice="ash",  # Лучший голос для английского
-            #     speed=speed
-            # )
+            # )  
+            return openai.TTS(
+                model="tts-1",
+                voice="ash",  # Лучший голос для английского
+                speed=speed
+            )
             
         elif language == "ru":
             return cartesia.TTS(

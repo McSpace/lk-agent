@@ -623,17 +623,17 @@ async def entrypoint(ctx: JobContext):
         session = AgentSession(
             stt=openai.STT(),
             llm=openai.LLM(model="gpt-4o-mini"),  # Используем более стабильную модель
-            # tts=openai.TTS(),
-            tts=elevenlabs.TTS(
-                model="eleven_multilingual_v2",
-                voice_id="8JVbfL6oEdmuxKn5DK2C",#"4YoYFeikaSRSlzRu5Ga0",
-                # voice_settings=VoiceSettings(
-                #         stability=0.40,
-                #         similarity_boost=0.50,
-                #         style=0.0,
-                #         use_speaker_boost=True
-                #     )
-                ),
+            tts=openai.TTS(),
+            # tts=elevenlabs.TTS(
+            #     model="eleven_multilingual_v2",
+            #     voice_id="8JVbfL6oEdmuxKn5DK2C",#"4YoYFeikaSRSlzRu5Ga0",
+            #     # voice_settings=VoiceSettings(
+            #     #         stability=0.40,
+            #     #         similarity_boost=0.50,
+            #     #         style=0.0,
+            #     #         use_speaker_boost=True
+            #     #     )
+            #     ),
             
             vad=ctx.proc.userdata["vad"],
             turn_detection=MultilingualModel(),
