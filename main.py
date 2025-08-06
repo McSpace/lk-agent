@@ -22,7 +22,7 @@ from livekit.agents import (
 )
 from livekit.agents.llm.llm import ChatChunk
 from livekit.agents.llm import function_tool
-from livekit.plugins import deepgram, openai, silero, cartesia, google
+from livekit.plugins import deepgram, openai, silero, cartesia, google, elevenlabs
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from dotenv import load_dotenv
 import livekit.api
@@ -379,7 +379,7 @@ class Assistant(Agent):
                     # Для строковых чанков (простые LLM ответы)
                     current_response_chunks.append(str(chunk))
                     is_last_chunk = True
-                    logger.info(f"🎯 String chunk received - treating as last: '{str(chunk)[:50]}...'")
+                    #logger.info(f"🎯 String chunk received - treating as last: '{str(chunk)[:50]}...'")
             
             logger.info(f"✅ Chunk iteration completed. Total chunks: {chunk_count}")
             
@@ -622,7 +622,12 @@ async def entrypoint(ctx: JobContext):
         session = AgentSession(
             stt=openai.STT(),
             llm=openai.LLM(model="gpt-4o-mini"),  # Используем более стабильную модель
-            tts=openai.TTS(),
+            # tts=openai.TTS(),
+            tts=elevenlabs.TTS(
+                model="eleven_v3",
+                voice_id="8JVbfL6oEdmuxKn5DK2C", 
+                ),
+            
             vad=ctx.proc.userdata["vad"],
             turn_detection=MultilingualModel(),
             min_endpointing_delay=1.2,  # Увеличено с 0.4 до 1.2 сек для предотвращения разбиения сообщений
