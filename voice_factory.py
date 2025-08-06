@@ -28,8 +28,9 @@ class VoiceComponentFactory:
         
         if language == "en":
             return elevenlabs.TTS(
-                model="eleven_v3",
-                voice_id="8JVbfL6oEdmuxKn5DK2C"  # Специальный EN голос
+                model="eleven_multilingual_v2",
+                voice_id="wXKeh4OrqzO6TjKQTRdw",  # Специальный EN голос
+                voice_settings={"speed": speed}
             )  
             # return openai.TTS(
             #     model="tts-1",
@@ -44,8 +45,9 @@ class VoiceComponentFactory:
             #     voice="da05e96d-ca10-4220-9042-d8acef654fa9"  # Русский голос Cartesia
             # )
             return elevenlabs.TTS(
-                model="eleven_v3",
-                voice_id="8JVbfL6oEdmuxKn5DK2C"  # Специальный RU голос
+                model="eleven_multilingual_v2",
+                voice_id="8JVbfL6oEdmuxKn5DK2C",  # Специальный RU голос
+                voice_settings={"speed": speed}
             )             
         elif language == "nl":
             # return elevenlabs.TTS(

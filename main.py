@@ -624,8 +624,8 @@ async def entrypoint(ctx: JobContext):
             llm=openai.LLM(model="gpt-4o-mini"),  # Используем более стабильную модель
             # tts=openai.TTS(),
             tts=elevenlabs.TTS(
-                model="eleven_v3",
-                voice_id="4YoYFeikaSRSlzRu5Ga0", #"8JVbfL6oEdmuxKn5DK2C", 
+                model="eleven_multilingual_v2",
+                voice_id="4YoYFeikaSRSlzRu5Ga0"
                 ),
             
             vad=ctx.proc.userdata["vad"],
