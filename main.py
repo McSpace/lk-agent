@@ -23,6 +23,7 @@ from livekit.agents import (
 from livekit.agents.llm.llm import ChatChunk
 from livekit.agents.llm import function_tool
 from livekit.plugins import deepgram, openai, silero, cartesia, google, elevenlabs
+from livekit.plugins.elevenlabs.tts import VoiceSettings
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from dotenv import load_dotenv
 import livekit.api
@@ -625,7 +626,13 @@ async def entrypoint(ctx: JobContext):
             # tts=openai.TTS(),
             tts=elevenlabs.TTS(
                 model="eleven_multilingual_v2",
-                voice_id="4YoYFeikaSRSlzRu5Ga0"
+                voice_id="4YoYFeikaSRSlzRu5Ga0",
+                voice_settings=VoiceSettings(
+                        stability=0.40,
+                        similarity_boost=0.50,
+                        style=0.0,
+                        use_speaker_boost=True
+                    )
                 ),
             
             vad=ctx.proc.userdata["vad"],
