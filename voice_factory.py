@@ -45,21 +45,21 @@ class VoiceComponentFactory:
             # )
             
         elif language == "ru":
-            # return cartesia.TTS(
-            #     language="ru",
-            #     model="sonic-2",
-            #     voice="da05e96d-ca10-4220-9042-d8acef654fa9"  # Русский голос Cartesia
-            # )
-            return elevenlabs.TTS(
-                model="eleven_multilingual_v2",
-                voice_id="8JVbfL6oEdmuxKn5DK2C",  # Специальный RU голос
-                # voice_settings=VoiceSettings(
-                #         stability=0.40,
-                #         similarity_boost=0.50,
-                #         style=0.0,
-                #         use_speaker_boost=True
-                #     )
-                )          
+            return cartesia.TTS(
+                language="ru",
+                model="sonic-2",
+                voice="da05e96d-ca10-4220-9042-d8acef654fa9"  # Русский голос Cartesia
+            )
+            # return elevenlabs.TTS(
+            #     model="eleven_multilingual_v2",
+            #     voice_id="8JVbfL6oEdmuxKn5DK2C",  # Специальный RU голос
+            #     # voice_settings=VoiceSettings(
+            #     #         stability=0.40,
+            #     #         similarity_boost=0.50,
+            #     #         style=0.0,
+            #     #         use_speaker_boost=True
+            #     #     )
+            #     )          
         elif language == "nl":
             # return elevenlabs.TTS(
             #     voice="dutch_female_voice_id"  # Специальный голландский голос
