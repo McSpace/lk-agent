@@ -351,7 +351,7 @@ class Assistant(Agent):
             # Получаем поток чанков от базового LLM узла
             async for chunk in Agent.default.llm_node(self, chat_ctx, tools, model_settings):
                 chunk_count += 1
-                logger.info(f"📦 Processing chunk #{chunk_count}: type={type(chunk).__name__}")
+                # logger.info(f"📦 Processing chunk #{chunk_count}: type={type(chunk).__name__}")
                 
                 # Передаем чанк дальше в TTS без прерывания потока
                 yield chunk
@@ -366,7 +366,7 @@ class Assistant(Agent):
                         
                         if delta_text:
                             current_response_chunks.append(delta_text)
-                            logger.info(f"📝 Added delta text: '{delta_text[:50]}...'")
+                            # logger.info(f"📝 Added delta text: '{delta_text[:50]}...'")
                         else:
                             logger.info(f"📝 No content in delta: {type(chunk.delta)}")
                         
@@ -625,7 +625,7 @@ async def entrypoint(ctx: JobContext):
             # tts=openai.TTS(),
             tts=elevenlabs.TTS(
                 model="eleven_v3",
-                voice_id="8JVbfL6oEdmuxKn5DK2C", 
+                voice_id="4YoYFeikaSRSlzRu5Ga0", #"8JVbfL6oEdmuxKn5DK2C", 
                 ),
             
             vad=ctx.proc.userdata["vad"],
