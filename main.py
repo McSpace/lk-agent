@@ -627,7 +627,7 @@ async def entrypoint(ctx: JobContext):
             tts= VoiceComponentFactory.create_tts(
                 user_voice_settings.language, 
                 1.0  # Используем дефолтную скорость
-            )
+            ),
             # tts=elevenlabs.TTS(
             #     model="eleven_multilingual_v2",
             #     voice_id="8JVbfL6oEdmuxKn5DK2C",#"4YoYFeikaSRSlzRu5Ga0",
