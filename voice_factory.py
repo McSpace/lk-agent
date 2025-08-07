@@ -45,10 +45,10 @@ class VoiceComponentFactory:
             )
             
         elif language == "ru":
-            return cartesia.TTS(
-                language="ru",
-                model="sonic-2",
-                voice="da05e96d-ca10-4220-9042-d8acef654fa9"  # Русский голос Cartesia
+            return openai.TTS(
+                model="tts-1",
+                voice="nova",  # Хороший голос для русского
+                speed=speed
             )
             # return elevenlabs.TTS(
             #     model="eleven_multilingual_v2",
