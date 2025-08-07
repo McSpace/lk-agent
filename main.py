@@ -814,11 +814,13 @@ async def entrypoint(ctx: JobContext):
         # Отправляем приветствие после успешного старта сессии
         if hasattr(assistant, 'greeting_text') and assistant.greeting_text:
             try:
-                logger.info("🔊 Sending greeting via session.say()")
+                logger.info(f"🔊 Sending greeting via session.say(): {assistant.greeting_text[:50]}...")
                 await session.say(assistant.greeting_text)
                 logger.info("✅ Greeting delivered successfully")
             except Exception as greeting_error:
                 logger.error(f"❌ Failed to send greeting: {greeting_error}")
+        else:
+            logger.warning("⚠️ No greeting text found to send")
         
     except Exception as e:
         logger.error(f"Failed to start agent session: {e}")
