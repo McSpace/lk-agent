@@ -237,22 +237,6 @@ class Assistant(Agent):
         
         # Отправляем последнюю картинку на фронт если это продолжение игры
         await self._send_latest_image_to_frontend()
-        
-        # Получаем приветствие/саммари но НЕ используем session.generate_reply() чтобы не загрязнять chat context
-        greeting = self.game_data.latest_summary.summary_text if self.game_data and self.game_data.latest_summary else (
-            self.game_data.intro if self.game_data and self.game_data.intro else "Добро пожаловать в игру! Опишите ваши действия."
-        )
-        
-        # Если есть latest_summary - это продолжение игры
-        if self.game_data and self.game_data.latest_summary:
-            logger.info(f"📖 Playing latest summary for continuing game: {greeting[:100]}...")
-        else:
-            logger.info(f"📢 Prepared intro greeting for new game: {greeting[:100]}...")
-            
-        # Приветствие будет отправлено после session.start() через session.say()
-        # Сохраняем текст для использования после старта сессии
-        self.greeting_text = greeting
-        logger.info("💬 Greeting prepared for post-session-start delivery")
             
     async def _send_latest_image_to_frontend(self):
         """Отправляет последнюю картинку на фронтенд при старте сессии"""
@@ -811,16 +795,25 @@ async def entrypoint(ctx: JobContext):
         await session.start(agent=assistant, room=ctx.room)
         logger.info("✅ Agent session started successfully")
         
-        # Отправляем приветствие после успешного старта сессии
-        if hasattr(assistant, 'greeting_text') and assistant.greeting_text:
-            try:
-                logger.info(f"🔊 Sending greeting via session.say(): {assistant.greeting_text[:50]}...")
-                await session.say(assistant.greeting_text)
-                logger.info("✅ Greeting delivered successfully")
-            except Exception as greeting_error:
-                logger.error(f"❌ Failed to send greeting: {greeting_error}")
-        else:
-            logger.warning("⚠️ No greeting text found to send")
+        # Генерируем и отправляем приветствие после успешного старта сессии
+        try:
+            # Получаем приветствие/саммари
+            greeting = game_data.latest_summary.summary_text if game_data and game_data.latest_summary else (
+                game_data.intro if game_data and game_data.intro else "Добро пожаловать в игру! Опишите ваши действия."
+            )
+            
+            # Если есть latest_summary - это продолжение игры
+            if game_data and game_data.latest_summary:
+                logger.info(f"📖 Playing latest summary for continuing game: {greeting[:100]}...")
+            else:
+                logger.info(f"📢 Sending intro greeting for new game: {greeting[:100]}...")
+            
+            logger.info("🔊 Sending greeting via session.say()")
+            await session.say(greeting)
+            logger.info("✅ Greeting delivered successfully")
+            
+        except Exception as greeting_error:
+            logger.error(f"❌ Failed to send greeting: {greeting_error}")
         
     except Exception as e:
         logger.error(f"Failed to start agent session: {e}")
