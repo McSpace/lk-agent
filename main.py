@@ -306,27 +306,27 @@ class Assistant(Agent):
         except Exception as e:
             logger.error(f"❌ Error generating final summary on session end: {e}")
 
-    async def tts_node(self, text, model_settings):
-        """Переопределенный tts_node для использования фабрики голосовых компонентов"""
-        logger.info(f"🔊 tts_node called with language='{self.voice_settings.language}', speed={self.voice_settings.speech_speed}")
+    # async def tts_node(self, text, model_settings):
+    #     """Переопределенный tts_node для использования фабрики голосовых компонентов"""
+    #     logger.info(f"🔊 tts_node called with language='{self.voice_settings.language}', speed={self.voice_settings.speech_speed}")
         
-        try:
-            # Создаем TTS компонент с текущими настройками через фабрику
-            current_tts = VoiceComponentFactory.create_tts(
-                self.voice_settings.language, 
-                self.voice_settings.speech_speed
-            )
+    #     try:
+    #         # Создаем TTS компонент с текущими настройками через фабрику
+    #         current_tts = VoiceComponentFactory.create_tts(
+    #             self.voice_settings.language, 
+    #             self.voice_settings.speech_speed
+    #         )
             
-            # Используем созданный TTS компонент для синтеза
-            async for frame in current_tts.synthesize(text):
-                yield frame
+    #         # Используем созданный TTS компонент для синтеза
+    #         async for frame in current_tts.synthesize(text):
+    #             yield frame
                 
-        except Exception as e:
-            logger.error(f"❌ TTS node error: {e}")
-            # Fallback на дефолтный TTS
-            logger.info("🔄 Falling back to default TTS")
-            async for frame in Agent.default.tts_node(self, text, model_settings):
-                yield frame
+    #     except Exception as e:
+    #         logger.error(f"❌ TTS node error: {e}")
+    #         # Fallback на дефолтный TTS
+    #         logger.info("🔄 Falling back to default TTS")
+    #         async for frame in Agent.default.tts_node(self, text, model_settings):
+    #             yield frame
 
     async def llm_node(self, chat_ctx, tools, model_settings):
         """Переопределенный llm_node для раннего перехвата ответа агента и обновления языка"""
@@ -623,7 +623,11 @@ async def entrypoint(ctx: JobContext):
         session = AgentSession(
             stt=openai.STT(),
             llm=openai.LLM(model="gpt-4o-mini"),  # Используем более стабильную модель
-            tts=openai.TTS(),
+            # tts=openai.TTS(),
+            tts= VoiceComponentFactory.create_tts(
+                user_voice_settings.language, 
+                1.0  # Используем дефолтную скорость
+            )
             # tts=elevenlabs.TTS(
             #     model="eleven_multilingual_v2",
             #     voice_id="8JVbfL6oEdmuxKn5DK2C",#"4YoYFeikaSRSlzRu5Ga0",
