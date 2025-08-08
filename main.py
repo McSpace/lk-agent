@@ -258,40 +258,15 @@ class Assistant(Agent):
             {f'Текущее состояние: {self.game_data.latest_summary.summary_text}' if self.game_data and self.game_data.latest_summary else ''}
             """.strip()
             
-            logger.info(f"🔄 Trying to update chat context for language switch to: {user_lang}")
+            logger.info(f"🔄 Updating instructions for language switch to: {user_lang}")
             
-            # Подход 1: Обновляем системные инструкции
+            # Используем только update_instructions() - возможно он все-таки работает правильно
             await self.update_instructions(updated_instructions)
-            logger.info(f"✅ Instructions updated via update_instructions()")
+            logger.info(f"✅ Instructions updated via update_instructions() for language: {user_lang}")
             
-            # Подход 2: Получаем текущий чат контекст и модифицируем его
-            current_ctx = self.chat_ctx
-            logger.info(f"🔍 Current chat context has {len(current_ctx.messages)} messages")
-            
-            if current_ctx.messages:
-                # Создаем новый контекст с обновленными инструкциями
-                from livekit.agents import llm
-                
-                new_ctx = llm.ChatContext()
-                
-                # Добавляем новое системное сообщение с правильным языком
-                new_ctx.messages.append(
-                    llm.ChatMessage.create(role="system", content=updated_instructions)
-                )
-                
-                # Копируем все остальные сообщения кроме старого system message
-                for msg in current_ctx.messages:
-                    if msg.role != "system":
-                        new_ctx.messages.append(msg)
-                
-                logger.info(f"🔄 Created new chat context with updated system message")
-                logger.info(f"📝 New context has {len(new_ctx.messages)} messages")
-                
-                # Обновляем чат контекст через official API
-                await self.update_chat_ctx(new_ctx)
-                logger.info(f"✅ Chat context updated via update_chat_ctx() for language: {user_lang}")
-            else:
-                logger.info(f"📝 No existing messages, using update_instructions() only")
+            # Пока отключаем сложную логику с chat context из-за ReadOnlyChatContext проблем
+            # TODO: Исследовать правильный способ работы с ReadOnlyChatContext в LiveKit 1.x
+            logger.info(f"📝 Using simplified approach with update_instructions() only")
             
         except Exception as e:
             logger.error(f"❌ Failed to update chat context: {e}")
