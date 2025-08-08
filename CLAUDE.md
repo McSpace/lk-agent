@@ -14,6 +14,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - [ ] VAD (Silero) для voice activity detection
 - [ ] Turn Detection multilingual model
 
+## ОБЯЗАТЕЛЬНОЕ ТРЕБОВАНИЕ ДЛЯ РАЗРАБОТКИ
+- [ ] **ВСЕГДА сверяться с документацией LiveKit 1.x перед изменениями кода**
+- [ ] **ОБЯЗАТЕЛЬНО проверять примеры на LiveKit 1.x перед реализацией новой функциональности**
+- [ ] **ИСПОЛЬЗОВАТЬ ТОЛЬКО официальные API методы LiveKit 1.x**
+- [ ] **НЕ изобретать самодельные решения если есть официальный API**
+
+### Ресурсы для проверки:
+- Официальная документация: https://docs.livekit.io/agents/
+- Python API Reference: https://docs.livekit.io/reference/python/v1/livekit/agents/
+- GitHub примеры: https://github.com/livekit-examples/python-agents-examples
+- Миграция с v0.x: https://docs.livekit.io/agents/start/v0-migration/
+
 ## API Integration Points
 - [ ] GET /api/v1/games/{game_id} от story-api НЕ ЛОМАТЬ
 - [ ] POST /api/v1/turns к story-api для saving turns

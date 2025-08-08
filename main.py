@@ -216,8 +216,7 @@ class Assistant(Agent):
         # Инициализируем fallback для updated_instructions
         self.updated_instructions = None
         
-        # Обновляем инструкции с правильным языком при инициализации через официальный API
-        self.update_llm_instructions()
+        # Обновление инструкций будет выполнено в on_enter() так как это async операция
         
         logger.info(f"🎛️ Voice settings initialized: language='{self.voice_settings.language}', speed={self.voice_settings.speech_speed}")
         logger.info(f"🔊 Initial TTS component created for language: {self.voice_settings.language}")
@@ -233,7 +232,7 @@ class Assistant(Agent):
         }
         return lang_names.get(lang_code, "English")
 
-    def update_llm_instructions(self):
+    async def update_llm_instructions(self):
         """Обновляет LLM инструкции с текущим языком используя официальный API LiveKit 1.x"""
         try:
             user_lang = self._get_language_name(self.voice_settings.language)
@@ -259,8 +258,8 @@ class Assistant(Agent):
             {f'Текущее состояние: {self.game_data.latest_summary.summary_text}' if self.game_data and self.game_data.latest_summary else ''}
             """.strip()
             
-            # Используем официальный API LiveKit 1.x для обновления инструкций
-            self.update_instructions(updated_instructions)
+            # Используем официальный API LiveKit 1.x для обновления инструкций - АСИНХРОННО
+            await self.update_instructions(updated_instructions)
             logger.info(f"🧠 LLM instructions updated using official API for language: {user_lang}")
             
         except Exception as e:
@@ -307,13 +306,16 @@ class Assistant(Agent):
         # Если язык изменился, обновляем LLM инструкции и пересоздаем TTS
         if old_language != validated_language:
             logger.info(f"🌐 Language changed from {old_language} to {validated_language}")
-            self.update_llm_instructions()
+            await self.update_llm_instructions()
             await self.recreate_tts_component()
         
         logger.info(f"✅ Voice settings updated: language='{self.voice_settings.language}', speed={self.voice_settings.speech_speed}")
 
     async def on_enter(self):
         logger.info("🎮 RPG Agent entered the session")
+        
+        # Обновляем инструкции с правильным языком при входе в сессию
+        await self.update_llm_instructions()
         
         # Отправляем последнюю картинку на фронт если это продолжение игры
         await self._send_latest_image_to_frontend()
