@@ -233,7 +233,7 @@ class Assistant(Agent):
         return lang_names.get(lang_code, "English")
 
     async def update_llm_instructions(self):
-        """Обновляет LLM инструкции с текущим языком используя официальный API LiveKit 1.x"""
+        """Обновляет LLM инструкции с текущим языком используя update_chat_ctx для модификации существующего контекста"""
         try:
             user_lang = self._get_language_name(self.voice_settings.language)
             
@@ -258,12 +258,46 @@ class Assistant(Agent):
             {f'Текущее состояние: {self.game_data.latest_summary.summary_text}' if self.game_data and self.game_data.latest_summary else ''}
             """.strip()
             
-            # Используем официальный API LiveKit 1.x для обновления инструкций - АСИНХРОННО
+            logger.info(f"🔄 Trying to update chat context for language switch to: {user_lang}")
+            
+            # Подход 1: Обновляем системные инструкции
             await self.update_instructions(updated_instructions)
-            logger.info(f"🧠 LLM instructions updated using official API for language: {user_lang}")
+            logger.info(f"✅ Instructions updated via update_instructions()")
+            
+            # Подход 2: Получаем текущий чат контекст и модифицируем его
+            current_ctx = self.chat_ctx
+            logger.info(f"🔍 Current chat context has {len(current_ctx.messages)} messages")
+            
+            if current_ctx.messages:
+                # Создаем новый контекст с обновленными инструкциями
+                from livekit.agents import llm
+                
+                new_ctx = llm.ChatContext()
+                
+                # Добавляем новое системное сообщение с правильным языком
+                new_ctx.messages.append(
+                    llm.ChatMessage.create(role="system", content=updated_instructions)
+                )
+                
+                # Копируем все остальные сообщения кроме старого system message
+                for msg in current_ctx.messages:
+                    if msg.role != "system":
+                        new_ctx.messages.append(msg)
+                
+                logger.info(f"🔄 Created new chat context with updated system message")
+                logger.info(f"📝 New context has {len(new_ctx.messages)} messages")
+                
+                # Обновляем чат контекст через official API
+                await self.update_chat_ctx(new_ctx)
+                logger.info(f"✅ Chat context updated via update_chat_ctx() for language: {user_lang}")
+            else:
+                logger.info(f"📝 No existing messages, using update_instructions() only")
             
         except Exception as e:
-            logger.error(f"❌ Failed to update LLM instructions using official API: {e}")
+            logger.error(f"❌ Failed to update chat context: {e}")
+            import traceback
+            logger.error(f"🔍 Traceback: {traceback.format_exc()}")
+            
             # Fallback - сохраняем инструкции для ручной обработки в llm_node
             self.updated_instructions = updated_instructions
             logger.info(f"🔄 Fallback: storing instructions for manual llm_node processing")

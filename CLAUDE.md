@@ -173,9 +173,9 @@ The project includes Docker containerization:
 **API integrations**: улучшение обработки DataChannel сообщений от фронтенда
 **Статус**: в работе - обнаружена ошибка TTS JSON serialization
 
-**ИСПРАВЛЕНИЕ**: Найден официальный метод `update_instructions()` в LiveKit 1.x API для обновления инструкций агента
+**ИСПРАВЛЕНИЕ**: Найдена проблема с `update_instructions()` - он не влияет на существующий chat context
 
-**Использован официальный подход**: Заменил самодельную модификацию chat context на официальный `self.update_instructions(updated_instructions)` согласно документации LiveKit 1.x
+**Новое решение**: Комбинированный подход с `update_instructions()` + `update_chat_ctx()` для модификации существующей истории чата с новыми системными инструкциями на правильном языке
 
 **Проблемы (исправлены)**:
 - ✅ LLM инструкции теперь обновляются через update_llm_instructions()
