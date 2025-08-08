@@ -159,7 +159,9 @@ The project includes Docker containerization:
 **Влияет на сервисы**: lk-agent, интеграция с story-front через DataChannel
 **Voice pipeline changes**: да, требуется пересоздание TTS компонента в runtime
 **API integrations**: улучшение обработки DataChannel сообщений от фронтенда
-**Статус**: реализовано
+**Статус**: в работе - обнаружена ошибка TTS JSON serialization
+
+**НОВАЯ ПРОБЛЕМА**: TTS компонент выдает ошибку `TypeError: Object of type async_generator is not JSON serializable` при попытке синтеза речи
 
 **Проблемы (исправлены)**:
 - ✅ LLM инструкции теперь обновляются через update_llm_instructions()

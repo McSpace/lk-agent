@@ -361,34 +361,41 @@ class Assistant(Agent):
         except Exception as e:
             logger.error(f"❌ Error generating final summary on session end: {e}")
 
-    async def tts_node(self, text, model_settings):
-        """Переопределенный tts_node для использования динамически созданного TTS компонента"""
-        logger.info(f"🔊 tts_node called with language='{self.voice_settings.language}', speed={self.voice_settings.speech_speed}")
+    # async def tts_node(self, text, model_settings):
+    #     """Переопределенный tts_node для использования динамически созданного TTS компонента"""
+    #     logger.info(f"🔊 tts_node called with language='{self.voice_settings.language}', speed={self.voice_settings.speech_speed}")
+    #     logger.info(f"🔍 Text to synthesize: '{text[:50]}...'")
         
-        try:
-            # Используем текущий TTS компонент (обновляется в recreate_tts_component)
-            if hasattr(self, 'current_tts') and self.current_tts:
-                logger.info(f"🎯 Using current TTS component for synthesis")
-                async for frame in self.current_tts.synthesize(text):
-                    yield frame
-            else:
-                logger.warning("⚠️ No current TTS component, creating fallback")
-                # Создаем TTS компонент с текущими настройками через фабрику
-                current_tts = VoiceComponentFactory.create_tts(
-                    self.voice_settings.language, 
-                    self.voice_settings.speech_speed
-                )
+    #     try:
+    #         # Используем текущий TTS компонент (обновляется в recreate_tts_component)
+    #         if hasattr(self, 'current_tts') and self.current_tts:
+    #             logger.info(f"🎯 Using current TTS component: {type(self.current_tts).__name__}")
                 
-                # Используем созданный TTS компонент для синтеза
-                async for frame in current_tts.synthesize(text):
-                    yield frame
+    #             # Правильно вызываем synthesize - передаем только текст
+    #             synthesis_stream = self.current_tts.synthesize(text)
+    #             logger.info(f"🔄 Got synthesis stream: {type(synthesis_stream)}")
                 
-        except Exception as e:
-            logger.error(f"❌ TTS node error: {e}")
-            # Fallback на дефолтный TTS
-            logger.info("🔄 Falling back to default TTS")
-            async for frame in Agent.default.tts_node(self, text, model_settings):
-                yield frame
+    #             async for frame in synthesis_stream:
+    #                 yield frame
+                    
+    #             logger.info("✅ TTS synthesis completed successfully")
+    #         else:
+    #             logger.warning("⚠️ No current TTS component, falling back to default")
+    #             # Fallback на дефолтный TTS сразу
+    #             async for frame in Agent.default.tts_node(self, text, model_settings):
+    #                 yield frame
+                
+    #     except Exception as e:
+    #         logger.error(f"❌ TTS node error: {e}")
+    #         logger.error(f"📍 Error details: {type(e).__name__}: {str(e)}")
+    #         # Fallback на дефолтный TTS
+    #         logger.info("🔄 Falling back to default TTS")
+    #         try:
+    #             async for frame in Agent.default.tts_node(self, text, model_settings):
+    #                 yield frame
+    #         except Exception as fallback_error:
+    #             logger.error(f"❌ Fallback TTS also failed: {fallback_error}")
+    #             raise
 
     async def llm_node(self, chat_ctx, tools, model_settings):
         """Переопределенный llm_node для раннего перехвата ответа агента и обновления языка"""
@@ -688,11 +695,11 @@ async def entrypoint(ctx: JobContext):
         session = AgentSession(
             stt=openai.STT(),
             llm=openai.LLM(model="gpt-4o-mini"),  # Используем более стабильную модель
-            # tts=openai.TTS(),
-            tts= VoiceComponentFactory.create_tts(
-                user_voice_settings.language, 
-                1.0  # Используем дефолтную скорость
-            ),
+            tts=openai.TTS(),  # Временно используем дефолтный TTS для диагностики
+            # tts= VoiceComponentFactory.create_tts(
+            #     user_voice_settings.language, 
+            #     1.0  # Используем дефолтную скорость
+            # ),
             # tts=elevenlabs.TTS(
             #     model="eleven_multilingual_v2",
             #     voice_id="8JVbfL6oEdmuxKn5DK2C",#"4YoYFeikaSRSlzRu5Ga0",
