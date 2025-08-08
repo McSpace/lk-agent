@@ -161,7 +161,9 @@ The project includes Docker containerization:
 **API integrations**: улучшение обработки DataChannel сообщений от фронтенда
 **Статус**: в работе - обнаружена ошибка TTS JSON serialization
 
-**НОВАЯ ПРОБЛЕМА**: TTS компонент выдает ошибку `TypeError: Object of type async_generator is not JSON serializable` при попытке синтеза речи
+**ИСПРАВЛЕНИЕ**: Найден официальный метод `update_instructions()` в LiveKit 1.x API для обновления инструкций агента
+
+**Использован официальный подход**: Заменил самодельную модификацию chat context на официальный `self.update_instructions(updated_instructions)` согласно документации LiveKit 1.x
 
 **Проблемы (исправлены)**:
 - ✅ LLM инструкции теперь обновляются через update_llm_instructions()

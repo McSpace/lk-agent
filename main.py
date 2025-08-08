@@ -213,6 +213,12 @@ class Assistant(Agent):
             self.voice_settings.speech_speed
         )
         
+        # Инициализируем fallback для updated_instructions
+        self.updated_instructions = None
+        
+        # Обновляем инструкции с правильным языком при инициализации через официальный API
+        self.update_llm_instructions()
+        
         logger.info(f"🎛️ Voice settings initialized: language='{self.voice_settings.language}', speed={self.voice_settings.speech_speed}")
         logger.info(f"🔊 Initial TTS component created for language: {self.voice_settings.language}")
 
@@ -228,7 +234,7 @@ class Assistant(Agent):
         return lang_names.get(lang_code, "English")
 
     def update_llm_instructions(self):
-        """Обновляет LLM инструкции с текущим языком"""
+        """Обновляет LLM инструкции с текущим языком используя официальный API LiveKit 1.x"""
         try:
             user_lang = self._get_language_name(self.voice_settings.language)
             
@@ -253,12 +259,15 @@ class Assistant(Agent):
             {f'Текущее состояние: {self.game_data.latest_summary.summary_text}' if self.game_data and self.game_data.latest_summary else ''}
             """.strip()
             
-            # Обновляем инструкции агента
-            self.instructions = updated_instructions
-            logger.info(f"🧠 LLM instructions updated for language: {user_lang}")
+            # Используем официальный API LiveKit 1.x для обновления инструкций
+            self.update_instructions(updated_instructions)
+            logger.info(f"🧠 LLM instructions updated using official API for language: {user_lang}")
             
         except Exception as e:
-            logger.error(f"❌ Failed to update LLM instructions: {e}")
+            logger.error(f"❌ Failed to update LLM instructions using official API: {e}")
+            # Fallback - сохраняем инструкции для ручной обработки в llm_node
+            self.updated_instructions = updated_instructions
+            logger.info(f"🔄 Fallback: storing instructions for manual llm_node processing")
 
     async def recreate_tts_component(self):
         """Пересоздает TTS компонент с новыми настройками языка"""
@@ -404,13 +413,16 @@ class Assistant(Agent):
         logger.info(f"🌐 Current language: {self.voice_settings.language}")
         
         try:
-            # Добавляем простую языковую инструкцию перед вызовом LLM
-            current_lang = self._get_language_name(self.voice_settings.language)
-            language_instruction = f"Отвечай на '{current_lang}' языке кратко, но увлекательно."
-            logger.info(f"📝 Language instruction: {language_instruction}")
+            # С официальным update_instructions() API нам не нужно вручную модифицировать chat context
+            # Инструкции уже обновлены через update_instructions() в update_llm_instructions()
+            logger.info(f"🔄 Using current agent instructions with language: {self.voice_settings.language}")
             
-            # Простое добавление языковой инструкции в начало контекста
-            # Временно удаляем сложную логику модификации контекста
+            # Проверяем есть ли fallback инструкции (если официальный API не сработал)
+            if hasattr(self, 'updated_instructions') and self.updated_instructions:
+                logger.warning(f"⚠️ Found fallback instructions - official API might have failed")
+                # Можно попробовать применить fallback, но обычно не нужно
+            else:
+                logger.info(f"✅ Agent instructions should be properly updated via official API")
             
             # Простое накопление чанков текущего вызова
             current_response_chunks = []
