@@ -177,10 +177,27 @@ class Assistant(Agent):
         user_lang = self._get_language_name(user_settings.language)
         
         # Формируем инструкции с учетом истории игры
-        # Генерируем инструкции с начальным языком
-        instructions = self._generate_instructions(user_settings.language)
+        instructions = f"""
+        Ты ведущий текстовой ролевой игры.
+        Пользователь описывает свои действия, а ты описываешь реакцию мира.
+        Отвечай на '{user_lang}' языке кратко, но увлекательно.
         
-        super().__init__(instructions=instructions)
+        У тебя есть доступ к игровым инструментам:
+        - roll_dice: для броска костей при проверках
+        - check_inventory: для проверки инвентаря игрока
+        
+        Используй эти инструменты когда игрок пытается выполнить действия требующие проверок.
+
+        Игровой мир:
+        {game_data.world_description if game_data else 'Средневековый мир с магией'}
+
+        Персонаж:
+        {game_data.character_description if game_data else 'Неизвестный герой'}
+
+        {f'Текущее состояние: {game_data.latest_summary.summary_text}' if game_data and game_data.latest_summary else ''}
+        """
+        
+        super().__init__(instructions=instructions.strip())
         self.game_data = game_data
         self.ctx = ctx
         self.turn_counter = 0  # Счетчик ходов для автоматической генерации саммари
@@ -202,30 +219,6 @@ class Assistant(Agent):
         }
         return lang_names.get(lang_code, "English")
 
-    def _generate_instructions(self, language_code: str) -> str:
-        """Генерация инструкций для агента с указанным языком"""
-        language_name = self._get_language_name(language_code)
-        
-        return f"""
-        Ты ведущий текстовой ролевой игры.
-        Пользователь описывает свои действия, а ты описываешь реакцию мира.
-        Отвечай на '{language_name}' языке кратко, но увлекательно.
-        
-        У тебя есть доступ к игровым инструментам:
-        - roll_dice: для броска костей при проверках
-        - check_inventory: для проверки инвентаря игрока
-        
-        Используй эти инструменты когда игрок пытается выполнить действия требующие проверок.
-
-        Игровой мир:
-        {self.game_data.world_description if self.game_data else 'Средневековый мир с магией'}
-
-        Персонаж:
-        {self.game_data.character_description if self.game_data else 'Неизвестный герой'}
-
-        {f'Текущее состояние: {self.game_data.latest_summary.summary_text}' if self.game_data and self.game_data.latest_summary else ''}
-        """.strip()
-
     async def update_voice_settings(self, language: str, speech_speed: float):
         """Обновить настройки голоса в runtime"""
         logger.info(f"🔄 Updating voice settings: {language}, speed={speech_speed}")
@@ -236,10 +229,6 @@ class Assistant(Agent):
         # Обновляем настройки
         self.voice_settings.language = validated_language
         self.voice_settings.speech_speed = validated_speed
-        
-        # Обновляем базовые инструкции агента с новым языком
-        self.instructions = self._generate_instructions(validated_language)
-        logger.info(f"📝 Agent instructions updated for language: {self._get_language_name(validated_language)}")
         
         logger.info(f"✅ Voice settings updated: language='{self.voice_settings.language}', speed={self.voice_settings.speech_speed}")
 
@@ -330,7 +319,13 @@ class Assistant(Agent):
         logger.info(f"🌐 Current language: {self.voice_settings.language}")
         
         try:
-            # Языковая инструкция теперь встроена в базовые инструкции агента
+            # Добавляем простую языковую инструкцию перед вызовом LLM
+            current_lang = self._get_language_name(self.voice_settings.language)
+            language_instruction = f"Отвечай на '{current_lang}' языке кратко, но увлекательно."
+            logger.info(f"📝 Language instruction: {language_instruction}")
+            
+            # Простое добавление языковой инструкции в начало контекста
+            # Временно удаляем сложную логику модификации контекста
             
             # Простое накопление чанков текущего вызова
             current_response_chunks = []
