@@ -940,7 +940,28 @@ async def entrypoint(ctx: JobContext):
                     # Запускаем обновление асинхронно
                     async def update_and_confirm():
                         try:
+                            # Сохраняем старый язык для проверки изменений
+                            old_language = assistant.voice_settings.language
+                            
                             await assistant.update_voice_settings(current_language, current_speed)
+                            
+                            # Сохраняем новый язык в базу данных через API если он изменился
+                            if assistant.game_data and new_language and old_language != assistant.voice_settings.language:
+                                try:
+                                    user_id = str(assistant.game_data.game.user_id)
+                                    async with aiohttp.ClientSession() as session:
+                                        update_data = {"language_code": assistant.voice_settings.language}
+                                        async with session.put(
+                                            f"{os.getenv('STORY_API_URL')}/api/v1/users/{user_id}",
+                                            json=update_data
+                                        ) as response:
+                                            if response.status == 200:
+                                                logger.info(f"✅ User language updated in database: {assistant.voice_settings.language}")
+                                            else:
+                                                error_text = await response.text()
+                                                logger.warning(f"⚠️ Failed to update user language in database: {response.status} - {error_text}")
+                                except Exception as db_error:
+                                    logger.error(f"❌ Error updating user language in database: {db_error}")
                             
                             # Отправляем подтверждение обратно на фронтенд
                             confirmation = {
