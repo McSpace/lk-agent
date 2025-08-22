@@ -166,8 +166,8 @@ async def send_to_imageGen_api(message_data, turn_id, game_data: GameData):
             # Исправляем формат для соответствия API схеме
             payload = {
                 "chat_history": message_data.get("content", "") if isinstance(message_data, dict) else str(message_data),
-                "illustration_style": game_data.image_style_prompt,
-                "main_character": game_data.character_appearance,
+                "illustration_style": game_data.image_style_prompt or "fantasy art style",  # Fallback если None
+                "main_character": game_data.character_appearance or "adventurer",  # Fallback если None
                 "file_name": turn_id  # Используем turn_id как file_name
             }
             logger.info("🎨 Sending image generation payload: %s", payload)
