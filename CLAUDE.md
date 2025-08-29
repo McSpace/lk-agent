@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Voice Processing Pipeline
 - [ ] STT (Deepgram) для speech recognition НЕ ЛОМАТЬ
-- [ ] LLM (OpenAI GPT) для RPG game master responses
+- [ ] LLM (OpenAI GPT gpt-4o) для RPG game master responses
 - [ ] TTS (Cartesia, ElevenLabs) для voice synthesis
 - [ ] VAD (Silero) для voice activity detection
 - [ ] Turn Detection multilingual model

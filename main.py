@@ -779,7 +779,7 @@ async def entrypoint(ctx: JobContext):
     try:
         session = AgentSession(
             stt=openai.STT(),
-            llm=openai.LLM(model="gpt-4o-mini"),  # Используем более стабильную модель
+            llm=openai.LLM(model="gpt-4o"),  # Используем более мощную модель для RPG агента
             tts=create_tts_with_fallback(
                 user_voice_settings.language, 
                 user_voice_settings.speech_speed
