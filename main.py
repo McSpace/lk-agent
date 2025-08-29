@@ -48,7 +48,9 @@ def create_stt_for_language(language: str):
         language="multi",  # Nova-3 использует multilingual режим
         interim_results=True,
         punctuate=True,
-        endpointing=100  # Рекомендуемое значение для multilingual mode
+        endpointing_ms=100,  # Рекомендуемое значение для multilingual mode
+        smart_format=False,
+        no_delay=True
     )
 
 def create_tts_with_fallback(language: str, speed: float = 1.0):
