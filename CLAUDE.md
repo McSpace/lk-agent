@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # КРИТИЧЕСКИЕ ТРЕБОВАНИЯ LIVEKIT AGENT (НЕ ЛОМАТЬ!)
 
 ## Voice Processing Pipeline
-- [ ] STT (Deepgram) для speech recognition НЕ ЛОМАТЬ
+- [ ] STT (Deepgram nova-3) для speech recognition НЕ ЛОМАТЬ
 - [ ] LLM (OpenAI GPT gpt-4o) для RPG game master responses
 - [ ] TTS (Cartesia, ElevenLabs) для voice synthesis
 - [ ] VAD (Silero) для voice activity detection
@@ -126,6 +126,8 @@ Required environment variables:
 - `LIVEKIT_API_SECRET` - LiveKit API secret
 - `LIVEKIT_URL` - LiveKit server URL
 - `STORY_API_URL` - Backend API for game data
+- `DEEPGRAM_API_KEY` - Deepgram STT API key for nova-3 model
+- `OPENAI_API_KEY` - OpenAI API key for LLM and TTS
 - `ELEVENLABS_API_KEY` - ElevenLabs TTS (if used)
 - `ELEVENLABS_VOICE_ID` - ElevenLabs voice ID
 
@@ -164,6 +166,24 @@ The project includes Docker containerization:
 - Virtual environment included (`venv/` directory)
 
 # НОВЫЕ ТРЕБОВАНИЯ
+
+### [2025-08-29] Настройка Deepgram STT с моделью nova-3
+**Описание**: Заменен OpenAI STT на Deepgram STT с моделью nova-3 для улучшенного распознавания речи. Добавлена поддержка динамического языка и пересоздания STT компонента в runtime.
+**Приоритет**: высокий
+**Влияет на сервисы**: lk-agent
+**Voice pipeline changes**: да, замена STT провайдера с OpenAI на Deepgram
+**API integrations**: добавлена интеграция с Deepgram API
+**Статус**: реализовано
+
+**Реализованные изменения**:
+- ✅ Создана функция create_stt_for_language() с поддержкой многоязычности
+- ✅ Обновлена инициализация AgentSession с Deepgram STT (nova-3)
+- ✅ Добавлен метод recreate_stt_component() для динамического обновления языка
+- ✅ Интегрировано пересоздание STT при смене языка в update_voice_settings()
+- ✅ Обновлена документация с требованием DEEPGRAM_API_KEY
+
+**Поддерживаемые языки**:
+- English (en-US), Russian (ru), Dutch (nl), French (fr), Spanish (es)
 
 ### [2025-08-14] Сохранение нового языка в базу данных
 **Описание**: Добавлена интеграция с новым API для сохранения изменений языка в user.language_code. Теперь при смене языка агент не только меняет runtime настройки, но и обновляет базу данных.

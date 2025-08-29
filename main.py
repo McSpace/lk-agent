@@ -36,6 +36,29 @@ from typing import Dict, Optional
 from voice_factory import VoiceComponentFactory
 
 
+def create_stt_for_language(language: str):
+    """
+    Создает Deepgram STT с правильным языковым кодом для распознавания речи
+    """
+    # Маппинг языковых кодов на Deepgram language codes
+    language_mapping = {
+        "en": "en-US",
+        "ru": "ru",
+        "nl": "nl",
+        "fr": "fr",
+        "es": "es"
+    }
+    
+    deepgram_lang = language_mapping.get(language, "en-US")
+    logger.info(f"🎙️ Creating Deepgram STT for language: {language} -> {deepgram_lang}")
+    
+    return deepgram.STT(
+        model="nova-3",
+        language=deepgram_lang,
+        interim_results=True,
+        punctuate=True
+    )
+
 def create_tts_with_fallback(language: str, speed: float = 1.0):
     """
     Создает TTS с простым fallback механизмом при quota exhaustion
@@ -269,7 +292,8 @@ class Assistant(Agent):
         # Настройки голоса пользователя
         self.voice_settings = user_settings
         
-        # Инициализируем текущий TTS компонент с fallback
+        # Инициализируем текущие STT и TTS компоненты
+        self.current_stt = create_stt_for_language(self.voice_settings.language)
         self.current_tts = create_tts_with_fallback(
             self.voice_settings.language, 
             self.voice_settings.speech_speed
@@ -281,6 +305,7 @@ class Assistant(Agent):
         # Обновление инструкций будет выполнено в on_enter() так как это async операция
         
         logger.info(f"🎛️ Voice settings initialized: language='{self.voice_settings.language}', speed={self.voice_settings.speech_speed}")
+        logger.info(f"🎙️ Initial STT component created for language: {self.voice_settings.language}")
         logger.info(f"🔊 Initial TTS component created for language: {self.voice_settings.language}")
 
     def _get_language_name(self, lang_code: str) -> str:
@@ -339,6 +364,24 @@ class Assistant(Agent):
             self.updated_instructions = updated_instructions
             logger.info(f"🔄 Fallback: storing instructions for manual llm_node processing")
 
+    async def recreate_stt_component(self):
+        """Пересоздает STT компонент с новыми настройками языка"""
+        try:
+            logger.info(f"🎙️ Recreating STT component for language: {self.voice_settings.language}")
+            
+            # Создаем новый STT компонент с правильным языком
+            new_stt = create_stt_for_language(self.voice_settings.language)
+            
+            # Сохраняем ссылку для возможного использования
+            self.current_stt = new_stt
+            logger.info(f"🎯 New STT component created and stored")
+            
+            return new_stt
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to recreate STT component: {e}")
+            return None
+
     async def recreate_tts_component(self):
         """Пересоздает TTS компонент с новыми настройками языка"""
         try:
@@ -374,10 +417,11 @@ class Assistant(Agent):
         self.voice_settings.language = validated_language
         self.voice_settings.speech_speed = validated_speed
         
-        # Если язык изменился, обновляем LLM инструкции и пересоздаем TTS
+        # Если язык изменился, обновляем LLM инструкции и пересоздаем STT/TTS
         if old_language != validated_language:
             logger.info(f"🌐 Language changed from {old_language} to {validated_language}")
             await self.update_llm_instructions()
+            await self.recreate_stt_component()
             await self.recreate_tts_component()
         
         logger.info(f"✅ Voice settings updated: language='{self.voice_settings.language}', speed={self.voice_settings.speech_speed}")
@@ -778,7 +822,7 @@ async def entrypoint(ctx: JobContext):
 
     try:
         session = AgentSession(
-            stt=openai.STT(),
+            stt=create_stt_for_language(user_voice_settings.language),
             llm=openai.LLM(model="gpt-4o"),  # Используем более мощную модель для RPG агента
             tts=create_tts_with_fallback(
                 user_voice_settings.language, 
