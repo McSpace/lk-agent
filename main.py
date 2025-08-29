@@ -227,23 +227,23 @@ class Assistant(Agent):
         
         # Формируем инструкции с учетом истории игры
         instructions = f"""
-        Ты ведущий текстовой ролевой игры.
-        Пользователь описывает свои действия, а ты описываешь реакцию мира.
-        Отвечай на '{user_lang}' языке кратко, но увлекательно.
+        You are a text-based RPG game master. Write all responses in {user_lang}.
+        The player describes their actions, and you describe how the world reacts.
+        Keep your responses brief but engaging, always in {user_lang}.
         
-        У тебя есть доступ к игровым инструментам:
-        - roll_dice: для броска костей при проверках
-        - check_inventory: для проверки инвентаря игрока
+        You have access to game tools:
+        - roll_dice: for dice rolls during checks
+        - check_inventory: to check player's inventory
         
-        Используй эти инструменты когда игрок пытается выполнить действия требующие проверок.
+        Use these tools when the player attempts actions that require checks.
 
-        Игровой мир:
-        {game_data.world_description if game_data else 'Средневековый мир с магией'}
+        Game World:
+        {game_data.world_description if game_data else 'Medieval fantasy world'}
 
-        Персонаж:
-        {game_data.character_description if game_data else 'Неизвестный герой'}
+        Character:
+        {game_data.character_description if game_data else 'Unknown hero'}
 
-        {f'Текущее состояние: {game_data.latest_summary.summary_text}' if game_data and game_data.latest_summary else ''}
+        {f'Current state: {game_data.latest_summary.summary_text}' if game_data and game_data.latest_summary else ''}
         """
         
         super().__init__(instructions=instructions.strip())
@@ -290,23 +290,23 @@ class Assistant(Agent):
             
             # Пересоздаем инструкции с обновленным языком
             updated_instructions = f"""
-            Ты ведущий текстовой ролевой игры.
-            Пользователь описывает свои действия, а ты описываешь реакцию мира.
-            Отвечай на '{user_lang}' языке кратко, но увлекательно.
+            You are a text-based RPG game master. Write all responses in {user_lang}.
+            The player describes their actions, and you describe how the world reacts.
+            Keep your responses brief but engaging, always in {user_lang}.
             
-            У тебя есть доступ к игровым инструментам:
-            - roll_dice: для броска костей при проверках
-            - check_inventory: для проверки инвентаря игрока
+            You have access to game tools:
+            - roll_dice: for dice rolls during checks
+            - check_inventory: to check player's inventory
             
-            Используй эти инструменты когда игрок пытается выполнить действия требующие проверок.
+            Use these tools when the player attempts actions that require checks.
 
-            Игровой мир:
-            {self.game_data.world_description if self.game_data else 'Средневековый мир с магией'}
+            Game World:
+            {self.game_data.world_description if self.game_data else 'Medieval fantasy world'}
 
-            Персонаж:
-            {self.game_data.character_description if self.game_data else 'Неизвестный герой'}
+            Character:
+            {self.game_data.character_description if self.game_data else 'Unknown hero'}
 
-            {f'Текущее состояние: {self.game_data.latest_summary.summary_text}' if self.game_data and self.game_data.latest_summary else ''}
+            {f'Current state: {self.game_data.latest_summary.summary_text}' if self.game_data and self.game_data.latest_summary else ''}
             """.strip()
             
             logger.info(f"🔄 Updating instructions for language switch to: {user_lang}")
@@ -505,6 +505,12 @@ class Assistant(Agent):
                 # Можно попробовать применить fallback, но обычно не нужно
             else:
                 logger.info(f"✅ Agent instructions should be properly updated via official API")
+            
+            # Добавляем логирование текущих инструкций для отладки
+            if hasattr(self.llm, '_instructions'):
+                logger.info(f"[AGENT DEBUG] Current LLM instructions: {self.llm._instructions[:200]}...")
+            else:
+                logger.info(f"[AGENT DEBUG] Unable to read current LLM instructions")
             
             # Простое накопление чанков текущего вызова
             current_response_chunks = []
