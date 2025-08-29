@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Voice Processing Pipeline
 - [ ] STT (Deepgram nova-3) для speech recognition НЕ ЛОМАТЬ
 - [ ] LLM (OpenAI GPT gpt-4o) для RPG game master responses
-- [ ] TTS (Cartesia, ElevenLabs) для voice synthesis
+- [ ] TTS (Cartesia sonic-2) для voice synthesis НЕ ЛОМАТЬ
 - [ ] VAD (Silero) для voice activity detection
 - [ ] Turn Detection multilingual model
 
@@ -127,9 +127,8 @@ Required environment variables:
 - `LIVEKIT_URL` - LiveKit server URL
 - `STORY_API_URL` - Backend API for game data
 - `DEEPGRAM_API_KEY` - Deepgram STT API key for nova-3 model
-- `OPENAI_API_KEY` - OpenAI API key for LLM and TTS
-- `ELEVENLABS_API_KEY` - ElevenLabs TTS (if used)
-- `ELEVENLABS_VOICE_ID` - ElevenLabs voice ID
+- `OPENAI_API_KEY` - OpenAI API key for LLM only
+- `CARTESIA_API_KEY` - Cartesia TTS API key for sonic-2 model
 
 ### Docker Support
 
@@ -166,6 +165,28 @@ The project includes Docker containerization:
 - Virtual environment included (`venv/` directory)
 
 # НОВЫЕ ТРЕБОВАНИЯ
+
+### [2025-08-29] Переход на Cartesia TTS для всех языков
+**Описание**: Заменена смешанная OpenAI/Cartesia TTS архитектура на единообразную Cartesia sonic-2 для всех поддерживаемых языков. Убрана сложная fallback логика.
+**Приоритет**: высокий
+**Влияет на сервисы**: lk-agent
+**Voice pipeline changes**: да, полная замена TTS провайдера на Cartesia
+**API integrations**: замена OpenAI TTS API на Cartesia TTS API
+**Статус**: реализовано
+
+**Реализованные изменения**:
+- ✅ Создана функция create_cartesia_tts() с маппингом голосов для 5 языков
+- ✅ Удалена функция create_tts_with_fallback() с fallback логикой
+- ✅ Обновлена инициализация AgentSession для использования Cartesia
+- ✅ Обновлен recreate_tts_component() для Cartesia
+- ✅ Обновлена документация с требованием CARTESIA_API_KEY
+
+**Поддерживаемые голоса**:
+- Russian (ru): `da05e96d-ca10-4220-9042-d8acef654fa9`
+- English (en): `42b39f37-515f-4eee-8546-73e841679c1d`
+- Dutch (nl): `9e8db62d-056f-47f3-b3b6-1b05767f9176`
+- French (fr): `5c3c89e5-535f-43ef-b14d-f8ffe148c1f0`
+- Spanish (es): `2695b6b5-5543-4be1-96d9-3967fb5e7fec`
 
 ### [2025-08-29] Настройка Deepgram STT с моделью nova-3
 **Описание**: Заменен OpenAI STT на Deepgram STT с моделью nova-3 для улучшенного распознавания речи. Добавлена поддержка динамического языка и пересоздания STT компонента в runtime.

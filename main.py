@@ -53,66 +53,29 @@ def create_stt_for_language(language: str):
         no_delay=True
     )
 
-def create_tts_with_fallback(language: str, speed: float = 1.0):
+def create_cartesia_tts(language: str, speed: float = 1.0):
     """
-    Создает TTS с простым fallback механизмом при quota exhaustion
-    Пробует OpenAI, при неудаче переключается на Cartesia
+    Создает Cartesia TTS с подходящими голосами для каждого языка
+    Использует модель sonic-2 для всех языков
     """
-    try:
-        # Пробуем OpenAI TTS для английского и русского
-        if language in ["en", "ru"]:
-            logger.info(f"🔊 Trying OpenAI TTS for {language}")
-            if language == "en":
-                return openai.TTS(model="tts-1", voice="ash", speed=speed)
-            else:  # ru
-                return openai.TTS(model="tts-1", voice="nova", speed=speed)
-        else:
-            # Для остальных языков сразу используем Cartesia
-            raise Exception("Non-OpenAI language, using Cartesia")
-            
-    except Exception as openai_error:
-        logger.warning(f"⚠️ OpenAI TTS failed: {openai_error}")
-        logger.info(f"🔄 Falling back to Cartesia TTS for {language}")
-        
-        # Fallback на Cartesia для всех языков
-        if language == "nl":
-            return cartesia.TTS(
-                language="nl", 
-                model="sonic-2", 
-                voice="9e8db62d-056f-47f3-b3b6-1b05767f9176"
-            )
-        elif language == "fr":
-            return cartesia.TTS(
-                language="fr", 
-                model="sonic-2", 
-                voice="5c3c89e5-535f-43ef-b14d-f8ffe148c1f0"
-            )
-        elif language == "es":
-            return cartesia.TTS(
-                language="es", 
-                model="sonic-2", 
-                voice="2695b6b5-5543-4be1-96d9-3967fb5e7fec"
-            )
-        elif language == "en":
-            return cartesia.TTS(
-                language="en", 
-                model="sonic-2", 
-                voice="a0e99841-438c-4a64-b679-ae501e7d6091"
-            )
-        elif language == "ru":
-            # Для русского тоже пробуем Cartesia
-            return cartesia.TTS(
-                language="en",  # Используем английский voice для русского
-                model="sonic-2", 
-                voice="a0e99841-438c-4a64-b679-ae501e7d6091"
-            )
-        else:
-            # Default fallback
-            return cartesia.TTS(
-                language="en", 
-                model="sonic-2", 
-                voice="a0e99841-438c-4a64-b679-ae501e7d6091"
-            )
+    # Маппинг языков на ID голосов Cartesia
+    voice_mapping = {
+        "ru": "da05e96d-ca10-4220-9042-d8acef654fa9",  # Russian voice
+        "en": "42b39f37-515f-4eee-8546-73e841679c1d",  # English voice
+        "nl": "9e8db62d-056f-47f3-b3b6-1b05767f9176",  # Dutch voice
+        "fr": "5c3c89e5-535f-43ef-b14d-f8ffe148c1f0",  # French voice
+        "es": "2695b6b5-5543-4be1-96d9-3967fb5e7fec"   # Spanish voice
+    }
+    
+    voice_id = voice_mapping.get(language, voice_mapping["en"])  # fallback to English
+    logger.info(f"🔊 Creating Cartesia TTS for language: {language} -> voice: {voice_id[:8]}...")
+    
+    return cartesia.TTS(
+        model="sonic-2",
+        language=language,
+        voice=voice_id
+    )
+
 
 load_dotenv()
 
@@ -288,7 +251,7 @@ class Assistant(Agent):
         
         # Инициализируем текущие STT и TTS компоненты
         self.current_stt = create_stt_for_language(self.voice_settings.language)
-        self.current_tts = create_tts_with_fallback(
+        self.current_tts = create_cartesia_tts(
             self.voice_settings.language, 
             self.voice_settings.speech_speed
         )
@@ -381,8 +344,8 @@ class Assistant(Agent):
         try:
             logger.info(f"🔊 Recreating TTS component for language: {self.voice_settings.language}")
             
-            # Создаем новый TTS компонент с fallback механизмом
-            new_tts = create_tts_with_fallback(
+            # Создаем новый Cartesia TTS компонент
+            new_tts = create_cartesia_tts(
                 self.voice_settings.language, 
                 self.voice_settings.speech_speed
             )
@@ -819,7 +782,7 @@ async def entrypoint(ctx: JobContext):
         session = AgentSession(
             stt=create_stt_for_language(user_voice_settings.language),
             llm=openai.LLM(model="gpt-4o"),  # Используем более мощную модель для RPG агента
-            tts=create_tts_with_fallback(
+            tts=create_cartesia_tts(
                 user_voice_settings.language, 
                 user_voice_settings.speech_speed
             ),
