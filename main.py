@@ -171,13 +171,20 @@ async def generate_summary_api(game_id: str) -> bool:
     try:
         async with aiohttp.ClientSession() as session:
             url = f"{os.getenv('STORY_API_URL')}/api/v1/summary/{game_id}/generate"
+            logger.info(f"[AGENT DEBUG] Calling summary API: {url}")
             async with session.post(url) as response:
                 if response.status == 200:
                     result = await response.json()
+                    logger.info(f"[AGENT DEBUG] Summary API response: {result}")
                     logger.info(f"✅ Summary generated for game {game_id}: turn {result.get('turn_number', 'unknown')}")
+                    
+                    # Log the actual summary content for debugging
+                    summary_text = result.get('summary_text', 'No summary text found')
+                    logger.info(f"[AGENT DEBUG] Generated summary content: '{summary_text[:100]}...'")
                     return True
                 else:
-                    logger.error(f"❌ Summary generation failed: {response.status}")
+                    response_text = await response.text()
+                    logger.error(f"❌ Summary generation failed: {response.status}, body: {response_text}")
                     return False
     except Exception as e:
         logger.error(f"❌ Summary generation error: {e}")
