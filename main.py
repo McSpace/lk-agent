@@ -38,25 +38,17 @@ from voice_factory import VoiceComponentFactory
 
 def create_stt_for_language(language: str):
     """
-    Создает Deepgram STT с правильным языковым кодом для распознавания речи
+    Создает Deepgram STT с многоязычной поддержкой nova-3
+    Nova-3 использует language=multi для автоматического определения языка
     """
-    # Маппинг языковых кодов на Deepgram language codes
-    language_mapping = {
-        "en": "en-US",
-        "ru": "ru",
-        "nl": "nl",
-        "fr": "fr",
-        "es": "es"
-    }
-    
-    deepgram_lang = language_mapping.get(language, "en-US")
-    logger.info(f"🎙️ Creating Deepgram STT for language: {language} -> {deepgram_lang}")
+    logger.info(f"🎙️ Creating Deepgram STT with multilingual support for base language: {language}")
     
     return deepgram.STT(
         model="nova-3",
-        language=deepgram_lang,
+        language="multi",  # Nova-3 использует multilingual режим
         interim_results=True,
-        punctuate=True
+        punctuate=True,
+        endpointing=100  # Рекомендуемое значение для multilingual mode
     )
 
 def create_tts_with_fallback(language: str, speed: float = 1.0):
@@ -417,12 +409,13 @@ class Assistant(Agent):
         self.voice_settings.language = validated_language
         self.voice_settings.speech_speed = validated_speed
         
-        # Если язык изменился, обновляем LLM инструкции и пересоздаем STT/TTS
+        # Если язык изменился, обновляем LLM инструкции и пересоздаем TTS
+        # STT не требует пересоздания т.к. использует multilingual mode
         if old_language != validated_language:
             logger.info(f"🌐 Language changed from {old_language} to {validated_language}")
             await self.update_llm_instructions()
-            await self.recreate_stt_component()
             await self.recreate_tts_component()
+            logger.info(f"📝 STT remains multilingual, no recreation needed")
         
         logger.info(f"✅ Voice settings updated: language='{self.voice_settings.language}', speed={self.voice_settings.speech_speed}")
 

@@ -182,8 +182,10 @@ The project includes Docker containerization:
 - ✅ Интегрировано пересоздание STT при смене языка в update_voice_settings()
 - ✅ Обновлена документация с требованием DEEPGRAM_API_KEY
 
-**Поддерживаемые языки**:
-- English (en-US), Russian (ru), Dutch (nl), French (fr), Spanish (es)
+**Multilingual Support**:
+- Nova-3 использует `language=multi` для автоматического определения языка
+- Поддерживает переключение между языками в одном аудиопотоке
+- Поддерживаемые языки: English, Spanish, French, German, Hindi, Russian, Portuguese, Japanese, Italian, Dutch
 
 ### [2025-08-14] Сохранение нового языка в базу данных
 **Описание**: Добавлена интеграция с новым API для сохранения изменений языка в user.language_code. Теперь при смене языка агент не только меняет runtime настройки, но и обновляет базу данных.
