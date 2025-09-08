@@ -487,7 +487,7 @@ class Assistant(Agent):
     async def tts_node(self, text, model_settings):
         """Переопределенный tts_node для использования динамически созданного TTS компонента"""
         logger.info(f"🔊 tts_node called with language='{self.voice_settings.language}', speed={self.voice_settings.speech_speed}")
-        logger.info(f"🔍 Text to synthesize: '{text[:50]}...' (length: {len(text)})")
+        logger.info(f"🔍 Text input type: {type(text)}, model_settings: {model_settings}")
         
         try:
             # Используем текущий TTS компонент (обновляется в recreate_tts_component)
@@ -501,7 +501,7 @@ class Assistant(Agent):
                 else:
                     logger.info(f"🎙️ TTS component voice info not available")
                 
-                # Правильно вызываем synthesize - передаем только текст
+                # Правильно вызываем synthesize - передаем text stream
                 synthesis_stream = self.current_tts.synthesize(text)
                 logger.info(f"🔄 Got synthesis stream: {type(synthesis_stream)}")
                 
