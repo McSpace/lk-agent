@@ -67,14 +67,31 @@ def create_cartesia_tts(language: str, speed: float = 1.0):
         "es": "2695b6b5-5543-4be1-96d9-3967fb5e7fec"   # Spanish voice
     }
     
-    voice_id = voice_mapping.get(language, voice_mapping["en"])  # fallback to English
-    logger.info(f"🔊 Creating Cartesia TTS for language: {language} -> voice: {voice_id[:8]}...")
+    # Валидация входного языка
+    if not language or language not in voice_mapping:
+        logger.warning(f"⚠️ Unsupported language '{language}', falling back to English")
+        language = "en"
     
-    return cartesia.TTS(
-        model="sonic-2",
-        language=language,
-        voice=voice_id
-    )
+    voice_id = voice_mapping[language]
+    logger.info(f"🔊 Creating Cartesia TTS for language: {language} -> voice: {voice_id[:8]}...")
+    logger.info(f"🎙️ Full voice ID: {voice_id}")
+    
+    # Валидация voice_id
+    if not voice_id or len(voice_id) < 30:  # Cartesia voice IDs обычно длинные UUID
+        logger.error(f"❌ Invalid voice_id: {voice_id}")
+        raise ValueError(f"Invalid voice_id for language {language}")
+    
+    try:
+        tts_component = cartesia.TTS(
+            model="sonic-2",
+            language=language,
+            voice=voice_id
+        )
+        logger.info(f"✅ Cartesia TTS component created successfully")
+        return tts_component
+    except Exception as e:
+        logger.error(f"❌ Failed to create Cartesia TTS component: {e}")
+        raise
 
 
 load_dotenv()
@@ -349,7 +366,12 @@ class Assistant(Agent):
     async def recreate_tts_component(self):
         """Пересоздает TTS компонент с новыми настройками языка"""
         try:
+            old_voice_id = None
+            if hasattr(self, 'current_tts') and self.current_tts and hasattr(self.current_tts, 'voice'):
+                old_voice_id = self.current_tts.voice
+            
             logger.info(f"🔊 Recreating TTS component for language: {self.voice_settings.language}")
+            logger.info(f"🔄 Previous voice ID: {old_voice_id[:8] + '...' if old_voice_id else 'None'}")
             
             # Создаем новый Cartesia TTS компонент
             new_tts = create_cartesia_tts(
@@ -357,14 +379,24 @@ class Assistant(Agent):
                 self.voice_settings.speech_speed
             )
             
+            # Логируем информацию о новом компоненте
+            if hasattr(new_tts, 'voice'):
+                new_voice_id = new_tts.voice
+                logger.info(f"🎯 New TTS component created with voice ID: {new_voice_id[:8]}...")
+                logger.info(f"🔄 Voice changed: {old_voice_id != new_voice_id}")
+            else:
+                logger.warning("⚠️ New TTS component doesn't have voice attribute")
+            
             # Сохраняем ссылку для использования в tts_node
             self.current_tts = new_tts
-            logger.info(f"🎯 New TTS component created and stored")
+            logger.info(f"✅ New TTS component stored successfully")
             
             return new_tts
             
         except Exception as e:
             logger.error(f"❌ Failed to recreate TTS component: {e}")
+            import traceback
+            logger.error(f"🔍 Traceback: {traceback.format_exc()}")
             return None
 
     async def update_voice_settings(self, language: str, speech_speed: float):
@@ -452,41 +484,53 @@ class Assistant(Agent):
         except Exception as e:
             logger.error(f"❌ Error generating final summary on session end: {e}")
 
-    # async def tts_node(self, text, model_settings):
-    #     """Переопределенный tts_node для использования динамически созданного TTS компонента"""
-    #     logger.info(f"🔊 tts_node called with language='{self.voice_settings.language}', speed={self.voice_settings.speech_speed}")
-    #     logger.info(f"🔍 Text to synthesize: '{text[:50]}...'")
+    async def tts_node(self, text, model_settings):
+        """Переопределенный tts_node для использования динамически созданного TTS компонента"""
+        logger.info(f"🔊 tts_node called with language='{self.voice_settings.language}', speed={self.voice_settings.speech_speed}")
+        logger.info(f"🔍 Text to synthesize: '{text[:50]}...' (length: {len(text)})")
         
-    #     try:
-    #         # Используем текущий TTS компонент (обновляется в recreate_tts_component)
-    #         if hasattr(self, 'current_tts') and self.current_tts:
-    #             logger.info(f"🎯 Using current TTS component: {type(self.current_tts).__name__}")
+        try:
+            # Используем текущий TTS компонент (обновляется в recreate_tts_component)
+            if hasattr(self, 'current_tts') and self.current_tts:
+                logger.info(f"🎯 Using current TTS component: {type(self.current_tts).__name__}")
                 
-    #             # Правильно вызываем synthesize - передаем только текст
-    #             synthesis_stream = self.current_tts.synthesize(text)
-    #             logger.info(f"🔄 Got synthesis stream: {type(synthesis_stream)}")
+                # Получаем информацию о текущем голосе для Cartesia TTS
+                if hasattr(self.current_tts, 'voice'):
+                    voice_id = self.current_tts.voice
+                    logger.info(f"🎙️ Using voice ID: {voice_id[:8]}... for language: {self.voice_settings.language}")
+                else:
+                    logger.info(f"🎙️ TTS component voice info not available")
                 
-    #             async for frame in synthesis_stream:
-    #                 yield frame
+                # Правильно вызываем synthesize - передаем только текст
+                synthesis_stream = self.current_tts.synthesize(text)
+                logger.info(f"🔄 Got synthesis stream: {type(synthesis_stream)}")
+                
+                frame_count = 0
+                async for frame in synthesis_stream:
+                    frame_count += 1
+                    yield frame
                     
-    #             logger.info("✅ TTS synthesis completed successfully")
-    #         else:
-    #             logger.warning("⚠️ No current TTS component, falling back to default")
-    #             # Fallback на дефолтный TTS сразу
-    #             async for frame in Agent.default.tts_node(self, text, model_settings):
-    #                 yield frame
+                logger.info(f"✅ TTS synthesis completed successfully ({frame_count} frames)")
+            else:
+                logger.warning("⚠️ No current TTS component, falling back to default")
+                # Fallback на дефолтный TTS
+                async for frame in super().tts_node(text, model_settings):
+                    yield frame
                 
-    #     except Exception as e:
-    #         logger.error(f"❌ TTS node error: {e}")
-    #         logger.error(f"📍 Error details: {type(e).__name__}: {str(e)}")
-    #         # Fallback на дефолтный TTS
-    #         logger.info("🔄 Falling back to default TTS")
-    #         try:
-    #             async for frame in Agent.default.tts_node(self, text, model_settings):
-    #                 yield frame
-    #         except Exception as fallback_error:
-    #             logger.error(f"❌ Fallback TTS also failed: {fallback_error}")
-    #             raise
+        except Exception as e:
+            logger.error(f"❌ TTS node error: {e}")
+            logger.error(f"📍 Error details: {type(e).__name__}: {str(e)}")
+            import traceback
+            logger.error(f"🔍 Traceback: {traceback.format_exc()}")
+            
+            # Fallback на дефолтный TTS
+            logger.info("🔄 Falling back to default TTS")
+            try:
+                async for frame in super().tts_node(text, model_settings):
+                    yield frame
+            except Exception as fallback_error:
+                logger.error(f"❌ Fallback TTS also failed: {fallback_error}")
+                raise
 
     async def llm_node(self, chat_ctx, tools, model_settings):
         """Переопределенный llm_node для раннего перехвата ответа агента и обновления языка"""
