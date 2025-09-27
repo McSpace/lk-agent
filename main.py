@@ -159,6 +159,11 @@ async def get_game_data(game_id: str) -> Optional[GameData]:
 async def send_to_imageGen_api(message_data, turn_id, game_data: GameData):
     """Асинхронная генерация картинки для игровой сцены"""
     try:
+        logger.info(f"🌐 send_to_imageGen_api CALLED")
+        logger.info(f"  Message data type: {type(message_data)}")
+        logger.info(f"  Turn ID: {turn_id}")
+        logger.info(f"  Game data: {bool(game_data)}")
+
         async with aiohttp.ClientSession() as session:
             # Исправляем формат для соответствия API схеме
             payload = {
@@ -167,16 +172,29 @@ async def send_to_imageGen_api(message_data, turn_id, game_data: GameData):
                 "main_character": game_data.character_appearance or "adventurer",  # Fallback если None
                 "file_name": turn_id  # Используем turn_id как file_name
             }
-            logger.info("🎨 Sending image generation payload: %s", payload)
+
+            logger.info(f"🌐 HTTP REQUEST to StoryImageGen")
+            logger.info(f"  Method: POST")
+            logger.info(f"  URL: https://storyimagegen-production.up.railway.app/process_chat")
+            logger.info(f"  Timeout: 60s")
+            logger.info(f"  Payload: {payload}")
+            logger.info(f"  Payload size: {len(str(payload))} chars")
+
             async with session.post("https://storyimagegen-production.up.railway.app/process_chat",
                                     timeout=60,
                                     json=payload) as response:
+                logger.info(f"📥 HTTP RESPONSE received")
+                logger.info(f"  Status: {response.status}")
+
                 if response.status == 200:
                     result = await response.json()
-                    logger.info("✅ Image generation completed")
+                    logger.info(f"  Response size: {len(str(result))} chars")
+                    logger.info("✅ Image generation completed successfully")
+                    logger.info(f"  Result keys: {list(result.keys()) if isinstance(result, dict) else 'Not a dict'}")
                     return result
                 else:
                     error_text = await response.text()
+                    logger.info(f"  Error response size: {len(error_text)} chars")
                     logger.error(f"❌ Image generation failed with status {response.status}: {error_text}")
                     return None
     except Exception as e:
@@ -599,18 +617,20 @@ class Assistant(Agent):
                         delta_text = ""
                         if hasattr(chunk.delta, 'content') and chunk.delta.content:
                             delta_text = chunk.delta.content
-                        
+
                         if delta_text:
                             current_response_chunks.append(delta_text)
                             # logger.info(f"📝 Added delta text: '{delta_text[:50]}...'")
                         else:
                             logger.info(f"📝 No content in delta: {type(chunk.delta)}")
-                        
+
                     # Проверяем является ли это последним чанком
                     if chunk.usage is not None:
+                        logger.info("🎯 CHUNK WITH USAGE DETECTED - MARKING AS LAST CHUNK")
+                        logger.info(f"📊 Usage details: {chunk.usage}")
                         is_last_chunk = True
-                        logger.info("🎯 Last LLM chunk detected via chunk.usage")
-                        logger.info(f"📊 Usage info: {chunk.usage}")
+                    else:
+                        logger.debug(f"📦 Regular chunk #{chunk_count} without usage")
                 else:
                     # Для строковых чанков (простые LLM ответы)
                     current_response_chunks.append(str(chunk))
@@ -623,14 +643,17 @@ class Assistant(Agent):
             full_response = ''.join(current_response_chunks)
             logger.info(f"📝 llm_node completed - response: '{full_response[:100]}...' (length: {len(full_response)})")
             
-            # Логируем все условия для сохранения
-            logger.info(f"🔍 Save conditions check:")
-            logger.info(f"  is_last_chunk: {is_last_chunk}")
-            logger.info(f"  pending_user_message: {bool(self.pending_user_message)}")
-            logger.info(f"  early_save_triggered: {self.early_save_triggered}")
-            
+            # Детальное логирование каждого условия для диагностики
+            logger.info(f"🔍 DETAILED Save conditions check:")
+            logger.info(f"  is_last_chunk: {is_last_chunk} (required: True)")
+            logger.info(f"  pending_user_message exists: {bool(self.pending_user_message)} (required: True)")
+            logger.info(f"  pending_user_message content: '{self.pending_user_message[:50] if self.pending_user_message else 'None'}...'")
+            logger.info(f"  early_save_triggered: {self.early_save_triggered} (required: False)")
+            logger.info(f"  ALL CONDITIONS MET: {is_last_chunk and self.pending_user_message and not self.early_save_triggered}")
+
             # Если это последний чанк И у нас есть pending user message - сохраняем сразу
             if is_last_chunk and self.pending_user_message and not self.early_save_triggered:
+                logger.info("✅ ALL CONDITIONS MET - TRIGGERING IMAGE GENERATION")
                 self.early_save_triggered = True
                 logger.info(f"📄 Full agent response: {full_response}")
                 logger.info("⚡ Immediate save triggered - calling _save_turn_immediately")
@@ -640,8 +663,21 @@ class Assistant(Agent):
                 asyncio.create_task(self._save_turn_immediately(self.pending_user_message, full_response))
                 self.pending_user_message = None  # Очищаем чтобы избежать дублирования
             else:
-                logger.info("⏭️ Save conditions not met - skipping save")
-                
+                logger.warning("❌ CONDITIONS NOT MET - NO IMAGE GENERATION")
+                if not is_last_chunk:
+                    logger.warning("  → Missing: is_last_chunk=False")
+                if not self.pending_user_message:
+                    logger.warning("  → Missing: no pending_user_message")
+                if self.early_save_triggered:
+                    logger.warning("  → Blocked: early_save_triggered=True")
+
+            # Сводное логирование состояния для диагностики
+            logger.info(f"📋 LLM_NODE SUMMARY:")
+            logger.info(f"  Total chunks processed: {chunk_count}")
+            logger.info(f"  Final is_last_chunk: {is_last_chunk}")
+            logger.info(f"  Response length: {len(full_response)}")
+            logger.info(f"  Image generation triggered: {is_last_chunk and self.pending_user_message and not self.early_save_triggered}")
+
         except Exception as e:
             logger.error(f"❌ Exception in llm_node: {e}")
             logger.error(f"📍 Exception details: {type(e).__name__}: {str(e)}")
@@ -652,19 +688,29 @@ class Assistant(Agent):
 
     async def on_user_turn_completed(self, turn_ctx, new_message):
         """Вызывается когда пользователь закончил говорить, до ответа агента"""
-        logger.info(f"🎤 User turn completed: {new_message.content}")
-        
+        logger.info(f"🎤 USER TURN COMPLETED - STORING MESSAGE")
+        logger.info(f"  Raw message type: {type(new_message.content)}")
+        logger.info(f"  Raw message content: {new_message.content}")
+
         # Извлекаем пользовательское сообщение
         user_content = new_message.content
         if isinstance(user_content, list) and len(user_content) > 0:
             user_content = user_content[0]
+            logger.info(f"  Extracted from list[0]: '{user_content}'")
         elif isinstance(user_content, list):
             user_content = ""
-            
+            logger.info(f"  Empty list - using empty string")
+        else:
+            logger.info(f"  Direct content: '{user_content}'")
+
         # Сохраняем для использования в llm_node
-        self.pending_user_message = str(user_content)
+        processed_content = str(user_content)
+        self.pending_user_message = processed_content
         self.early_save_triggered = False  # Сбрасываем флаг для нового хода
-        logger.info(f"💬 User message stored for llm_node early capture: '{self.pending_user_message[:100]}...'")
+
+        logger.info(f"💬 User message processed and stored:")
+        logger.info(f"  Processed content: '{processed_content[:100]}...'")
+        logger.info(f"  early_save_triggered reset to: False")
         logger.info("⏳ Waiting for llm_node to capture complete response...")
         
     async def _save_turn_immediately(self, user_message: str, agent_message: str):
@@ -721,9 +767,16 @@ class Assistant(Agent):
 
     async def handle_imagegen_api(self, gm_text, last_turn_id, user_text):
         """Фоновая обработка генерации и отправки картинки"""
+        logger.info(f"🎨 handle_imagegen_api STARTED")
+        logger.info(f"  GM text type: {type(gm_text)}")
+        logger.info(f"  GM text preview: '{str(gm_text)[:100]}...'")
+        logger.info(f"  Turn ID: {last_turn_id}")
+        logger.info(f"  User text: '{user_text[:50]}...'")
+        logger.info(f"  Game data available: {bool(self.game_data)}")
+
         image_url = ""
         image_prompt = ""
-        
+
         try:
             # Конвертируем сообщение в правильный формат для API
             if isinstance(gm_text, list):
@@ -732,7 +785,11 @@ class Assistant(Agent):
             
             # Создаем простую структуру для API (не объект ChatMessage)
             chat_history_for_api = {"content": gm_text}
-            
+            logger.info(f"🌐 CALLING StoryImageGen API")
+            logger.info(f"  API payload structure: {chat_history_for_api}")
+            logger.info(f"  Game data for API: illustration_style='{self.game_data.image_style_prompt if self.game_data else 'None'}'")
+            logger.info(f"  Game data for API: character_appearance='{self.game_data.character_appearance if self.game_data else 'None'}'")
+
             # Генерируем картинку асинхронно
             result = await send_to_imageGen_api(chat_history_for_api, last_turn_id, self.game_data)
             
@@ -791,31 +848,46 @@ class Assistant(Agent):
             await save_next_turn_api(user_text, agent_text, str(self.game_data.game.id))
 
     async def _save_and_generate_image(self, user_message: str, agent_message: str):
-        """Сохраняет ход и генерирует картинку при необходимости"""  
+        """Сохраняет ход и генерирует картинку при необходимости"""
         try:
+            logger.info(f"🎨 _save_and_generate_image CALLED")
+            logger.info(f"  User message type: {type(user_message)}")
+            logger.info(f"  Agent message type: {type(agent_message)}")
+            logger.info(f"  Game data available: {bool(self.game_data)}")
+
             # Исправляем формат сообщений - конвертируем массивы в строки
             if isinstance(agent_message, list):
                 agent_message = agent_message[0] if len(agent_message) > 0 else ""
+                logger.info(f"  Agent message extracted from list: '{agent_message[:50]}...'")
             if isinstance(user_message, list):
                 user_message = user_message[0] if len(user_message) > 0 else ""
-                
+                logger.info(f"  User message extracted from list: '{user_message[:50]}...'")
+
             # Убеждаемся что это строки
             agent_message = str(agent_message)
             user_message = str(user_message)
-            
-            logger.info(f"💾 Saving turn - User: '{user_message[:50]}...', Agent: '{agent_message[:50]}...'")
-            
+
+            logger.info(f"💾 Final processed messages:")
+            logger.info(f"  User: '{user_message[:50]}...' (length: {len(user_message)})")
+            logger.info(f"  Agent: '{agent_message[:50]}...' (length: {len(agent_message)})")
+
             # НЕ сохраняем ход сразу - ждем генерации картинки
             # import asyncio
             # asyncio.create_task(self.save_turn_background(user_message, agent_message))
             # logger.info("📊 Turn saved successfully")
-            
+
             # Генерируем картинку на каждом ходе - сохранение произойдет там
             import uuid
             turn_id = str(uuid.uuid4())
-            logger.info("🎨 Image generation triggered for every turn")
+            logger.info("🎨 LAUNCHING handle_imagegen_api TASK")
+            logger.info(f"  Turn ID: {turn_id}")
+            logger.info(f"  Will call: handle_imagegen_api(agent_message, turn_id, user_msg)")
+
             # Используем сохраненное пользовательское сообщение
             user_msg = getattr(self, 'last_user_message', user_message)
+            logger.info(f"  Using user_msg: '{user_msg[:50]}...'")
+
+            import asyncio
             asyncio.create_task(self.handle_imagegen_api(agent_message, turn_id, user_msg))
                 
         except Exception as e:
