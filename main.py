@@ -156,6 +156,39 @@ async def get_game_data(game_id: str) -> Optional[GameData]:
         logger.error(f"Error fetching game data: {e}")
         return None
 
+async def get_intro_instruction(game_id: str) -> Optional[str]:
+    """Получает инструкцию для генерации intro из API"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = f"{os.getenv('STORY_API_URL')}/api/v1/games/{game_id}/intro-instruction"
+            async with session.get(url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get("instruction")
+                logger.error(f"Failed to fetch intro instruction: {response.status}")
+                return None
+    except Exception as e:
+        logger.error(f"Error fetching intro instruction: {e}")
+        return None
+
+async def save_intro(game_id: str, intro: str) -> bool:
+    """Сохраняет intro, API автоматически генерирует title"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = f"{os.getenv('STORY_API_URL')}/api/v1/games/{game_id}/intro"
+            async with session.patch(url, json={"intro": intro}) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    logger.info(f"✅ Intro saved, title generated: {data.get('title', 'N/A')}")
+                    return True
+                else:
+                    error_text = await response.text()
+                    logger.error(f"Failed to save intro: {response.status} - {error_text}")
+                    return False
+    except Exception as e:
+        logger.error(f"Error saving intro: {e}")
+        return False
+
 async def send_to_imageGen_api(message_data, turn_id, game_data: GameData):
     """Асинхронная генерация картинки для игровой сцены"""
     try:
@@ -1183,23 +1216,64 @@ async def entrypoint(ctx: JobContext):
         
         # Генерируем и отправляем приветствие после успешного старта сессии
         try:
-            # Получаем приветствие/саммари
-            greeting = game_data.latest_summary.summary_text if game_data and game_data.latest_summary else (
-                game_data.intro if game_data and game_data.intro else "Добро пожаловать в игру! Опишите ваши действия."
-            )
-            
-            # Если есть latest_summary - это продолжение игры
-            if game_data and game_data.latest_summary:
-                logger.info(f"📖 Playing latest summary for continuing game: {greeting[:100]}...")
+            # Проверяем это новая игра или продолжение
+            if game_data and (not game_data.intro or game_data.intro == ""):
+                # Новая игра - генерируем intro потоково через LLM
+                logger.info("🆕 New game detected - generating intro via LLM streaming")
+
+                # Получаем инструкцию для генерации intro
+                intro_instruction = await get_intro_instruction(game_id)
+                if not intro_instruction:
+                    logger.error("❌ Failed to get intro instruction, using fallback")
+                    await session.say("Welcome to the game!")
+                else:
+                    logger.info(f"📝 Received intro instruction, starting streaming generation")
+
+                    # Генерируем intro потоково через session.generate_reply
+                    speech_handle = await session.generate_reply(
+                        instructions=intro_instruction,
+                        allow_interruptions=True
+                    )
+
+                    logger.info("🎙️ Intro streaming started")
+
+                    # Ждем завершения генерации чтобы получить финальный текст
+                    await speech_handle.wait_for_completion()
+                    generated_intro = speech_handle.text
+
+                    logger.info(f"✅ Intro generation completed: {len(generated_intro)} chars")
+
+                    # Фоновая задача: сохранить intro (title сгенерируется автоматически в API)
+                    async def save_generated_intro():
+                        success = await save_intro(game_id, generated_intro)
+                        if success:
+                            logger.info("✅ Intro and title saved successfully")
+                        else:
+                            logger.warning("⚠️ Failed to save intro")
+
+                    asyncio.create_task(save_generated_intro())
+
+            elif game_data and game_data.latest_summary:
+                # Продолжение игры - озвучиваем саммари
+                logger.info(f"📖 Continuing game - playing summary")
+                await session.say(game_data.latest_summary.summary_text)
+                logger.info("✅ Summary delivered successfully")
+
+            elif game_data and game_data.intro:
+                # Старая игра с готовым intro
+                logger.info(f"📢 Existing game - playing intro")
+                await session.say(game_data.intro)
+                logger.info("✅ Intro delivered successfully")
+
             else:
-                logger.info(f"📢 Sending intro greeting for new game: {greeting[:100]}...")
-            
-            logger.info("🔊 Sending greeting via session.say()")
-            await session.say(greeting)
-            logger.info("✅ Greeting delivered successfully")
-            
+                # Fallback
+                logger.warning("⚠️ No game data available, using default greeting")
+                await session.say("Welcome to the game!")
+
         except Exception as greeting_error:
             logger.error(f"❌ Failed to send greeting: {greeting_error}")
+            import traceback
+            logger.error(f"🔍 Traceback: {traceback.format_exc()}")
         
     except Exception as e:
         logger.error(f"Failed to start agent session: {e}")
