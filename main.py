@@ -676,33 +676,55 @@ class Assistant(Agent):
             full_response = ''.join(current_response_chunks)
             logger.info(f"📝 llm_node completed - response: '{full_response[:100]}...' (length: {len(full_response)})")
             
+            # Проверяем это новая игра (intro generation) или обычный ход
+            is_new_game_intro = (not self.pending_user_message and
+                                 self.game_data and
+                                 (not self.game_data.intro or self.game_data.intro == ""))
+
             # Детальное логирование каждого условия для диагностики
             logger.info(f"🔍 DETAILED Save conditions check:")
             logger.info(f"  is_last_chunk: {is_last_chunk} (required: True)")
-            logger.info(f"  pending_user_message exists: {bool(self.pending_user_message)} (required: True)")
+            logger.info(f"  pending_user_message exists: {bool(self.pending_user_message)}")
             logger.info(f"  pending_user_message content: '{self.pending_user_message[:50] if self.pending_user_message else 'None'}...'")
             logger.info(f"  early_save_triggered: {self.early_save_triggered} (required: False)")
-            logger.info(f"  ALL CONDITIONS MET: {is_last_chunk and self.pending_user_message and not self.early_save_triggered}")
+            logger.info(f"  is_new_game_intro: {is_new_game_intro}")
 
-            # Если это последний чанк И у нас есть pending user message - сохраняем сразу
-            if is_last_chunk and self.pending_user_message and not self.early_save_triggered:
-                logger.info("✅ ALL CONDITIONS MET - TRIGGERING IMAGE GENERATION")
-                self.early_save_triggered = True
-                logger.info(f"📄 Full agent response: {full_response}")
-                logger.info("⚡ Immediate save triggered - calling _save_turn_immediately")
-                
-                # Запускаем сохранение и генерацию изображения немедленно
-                import asyncio
-                asyncio.create_task(self._save_turn_immediately(self.pending_user_message, full_response))
-                self.pending_user_message = None  # Очищаем чтобы избежать дублирования
+            # Если это последний чанк и либо обычный ход либо intro новой игры - сохраняем
+            if is_last_chunk and not self.early_save_triggered:
+                if self.pending_user_message:
+                    # Обычный ход игры
+                    logger.info("✅ NORMAL TURN - TRIGGERING SAVE AND IMAGE GENERATION")
+                    self.early_save_triggered = True
+                    logger.info(f"📄 Full agent response: {full_response}")
+                    logger.info("⚡ Immediate save triggered - calling _save_turn_immediately")
+
+                    import asyncio
+                    asyncio.create_task(self._save_turn_immediately(self.pending_user_message, full_response))
+                    self.pending_user_message = None
+
+                elif is_new_game_intro:
+                    # Intro для новой игры
+                    logger.info("✅ NEW GAME INTRO - TRIGGERING SAVE AND IMAGE GENERATION")
+                    self.early_save_triggered = True
+                    logger.info(f"📄 Generated intro: {full_response[:100]}...")
+
+                    import asyncio
+                    # Сохраняем intro (title сгенерируется автоматически в API)
+                    asyncio.create_task(save_intro(str(self.game_data.game.id), full_response))
+
+                    # Генерируем изображение для intro
+                    asyncio.create_task(self._save_turn_immediately("START_OF_GAME", full_response))
+
+                else:
+                    logger.warning("❌ CONDITIONS NOT MET - NO SAVE/IMAGE GENERATION")
             else:
                 logger.warning("❌ CONDITIONS NOT MET - NO IMAGE GENERATION")
                 if not is_last_chunk:
                     logger.warning("  → Missing: is_last_chunk=False")
-                if not self.pending_user_message:
-                    logger.warning("  → Missing: no pending_user_message")
                 if self.early_save_triggered:
                     logger.warning("  → Blocked: early_save_triggered=True")
+                if not self.pending_user_message and not is_new_game_intro:
+                    logger.warning("  → Missing: neither user message nor new game intro")
 
             # Сводное логирование состояния для диагностики
             logger.info(f"📋 LLM_NODE SUMMARY:")
@@ -1230,6 +1252,7 @@ async def entrypoint(ctx: JobContext):
                     logger.info(f"📝 Received intro instruction, starting streaming generation")
 
                     # Генерируем intro потоково через session.generate_reply
+                    # Сохранение intro и генерация изображения произойдут в llm_node
                     speech_handle = await session.generate_reply(
                         instructions=intro_instruction,
                         allow_interruptions=True
@@ -1237,21 +1260,11 @@ async def entrypoint(ctx: JobContext):
 
                     logger.info("🎙️ Intro streaming started")
 
-                    # Ждем завершения генерации чтобы получить финальный текст
-                    await speech_handle.wait_for_completion()
-                    generated_intro = speech_handle.text
+                    # Ждем завершения озвучки (правильный API LiveKit 1.x)
+                    await speech_handle.waitForPlayout()
 
-                    logger.info(f"✅ Intro generation completed: {len(generated_intro)} chars")
-
-                    # Фоновая задача: сохранить intro (title сгенерируется автоматически в API)
-                    async def save_generated_intro():
-                        success = await save_intro(game_id, generated_intro)
-                        if success:
-                            logger.info("✅ Intro and title saved successfully")
-                        else:
-                            logger.warning("⚠️ Failed to save intro")
-
-                    asyncio.create_task(save_generated_intro())
+                    logger.info(f"✅ Intro generation and playout completed")
+                    logger.info(f"💾 Intro text saved and image generated by llm_node")
 
             elif game_data and game_data.latest_summary:
                 # Продолжение игры - озвучиваем саммари
