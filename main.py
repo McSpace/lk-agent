@@ -1317,9 +1317,12 @@ if __name__ == "__main__":
             from livekit.plugins import turn_detector
             from livekit.agents import Plugin
 
-            # Get the registered plugin and call its download_files method
-            plugins = Plugin.registered_plugins()
+            # Get the registered plugins (it's a list property, not a method)
+            plugins = Plugin.registered_plugins
+            logger.info(f"Found {len(plugins)} registered plugins")
+
             for plugin in plugins:
+                logger.info(f"Checking plugin: {plugin.package}")
                 if 'turn_detector' in plugin.package:
                     logger.info(f"Found turn detector plugin: {plugin.package}")
                     plugin.download_files()
