@@ -1308,15 +1308,30 @@ if __name__ == "__main__":
             logger.info("✅ Silero VAD models downloaded")
         except Exception as e:
             logger.error(f"❌ Failed to download Silero VAD: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
 
-        # Download multilingual turn detector models
+        # Download multilingual turn detector models using plugin API
         try:
             logger.info("⏬ Downloading multilingual turn detector models...")
-            from livekit.plugins.turn_detector.multilingual import MultilingualModel
-            _ = MultilingualModel()
-            logger.info("✅ Multilingual turn detector models downloaded")
+            from livekit.plugins import turn_detector
+            from livekit.agents import Plugin
+
+            # Get the registered plugin and call its download_files method
+            plugins = Plugin.registered_plugins()
+            for plugin in plugins:
+                if 'turn_detector' in plugin.package:
+                    logger.info(f"Found turn detector plugin: {plugin.package}")
+                    plugin.download_files()
+                    logger.info("✅ Multilingual turn detector models downloaded")
+                    break
+            else:
+                logger.warning("⚠️ Turn detector plugin not found in registered plugins")
+
         except Exception as e:
             logger.error(f"❌ Failed to download turn detector: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
 
         # Download Deepgram and Cartesia models (they don't need pre-download, API-based)
         logger.info("ℹ️ Deepgram and Cartesia are API-based, no pre-download needed")
