@@ -41,8 +41,9 @@ RUN python -m pip install --user --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Note: Models will be downloaded at runtime on first use
-# The download-files command is not available with the new LiveKit CLI API
+# Pre-download models at build time to avoid runtime downloads
+# This ensures the agent works in environments without internet access
+RUN python main.py download-files
 
 # Run the application.
 ENTRYPOINT ["python", "main.py"]

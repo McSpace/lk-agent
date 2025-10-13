@@ -1295,6 +1295,36 @@ async def entrypoint(ctx: JobContext):
 
 
 if __name__ == "__main__":
+    import sys
+
+    # Handle download-files command for Docker build
+    if len(sys.argv) > 1 and sys.argv[1] == "download-files":
+        logger.info("📥 Downloading required models for offline usage...")
+
+        # Download Silero VAD models
+        try:
+            logger.info("⏬ Downloading Silero VAD models...")
+            _ = silero.VAD.load()
+            logger.info("✅ Silero VAD models downloaded")
+        except Exception as e:
+            logger.error(f"❌ Failed to download Silero VAD: {e}")
+
+        # Download multilingual turn detector models
+        try:
+            logger.info("⏬ Downloading multilingual turn detector models...")
+            from livekit.plugins.turn_detector.multilingual import MultilingualModel
+            _ = MultilingualModel()
+            logger.info("✅ Multilingual turn detector models downloaded")
+        except Exception as e:
+            logger.error(f"❌ Failed to download turn detector: {e}")
+
+        # Download Deepgram and Cartesia models (they don't need pre-download, API-based)
+        logger.info("ℹ️ Deepgram and Cartesia are API-based, no pre-download needed")
+
+        logger.info("✅ All models downloaded successfully!")
+        sys.exit(0)
+
+    # Normal agent startup
     cli.run_app(WorkerOptions(
         shutdown_process_timeout=5,
         entrypoint_fnc=entrypoint,
