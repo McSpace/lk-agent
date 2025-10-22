@@ -1,4 +1,4 @@
-# LiveKit Agent for AI Worlds
+# Real-time Voice Agent for AI Worlds
 
 **Part of the aiworlds.online ecosystem**
 
@@ -10,7 +10,7 @@
 
 The aiworlds.online ecosystem consists of several interconnected services:
 
-- **lk-agent** (this repository) - LiveKit-based voice agent for real-time RPG game narration
+- **lk-agent** (this repository) - Real-time voice agent for AI-powered RPG game narration
 - **story-api** - Backend API for game data, user management, and turn persistence
 - **story-front** - Frontend web application for game interface and visualization
 - **StoryImageGen** - AI-powered image generation service for scene visualization
@@ -26,8 +26,8 @@ The aiworlds.online ecosystem consists of several interconnected services:
 - **Dynamic Language Switching** - Change language on-the-fly during active sessions
 - **AI Game Master** - Context-aware RPG narration powered by GPT-4o
 - **Scene Visualization** - Automatic generation of scene images for each turn
+- **Intelligent Context Management** - RAG-powered world lore integration with conversation summaries
 - **Persistent Game State** - Integration with backend API for game progression tracking
-- **Conversation Summaries** - Automatic summarization every 6 turns for context management
 
 ## Architecture
 
@@ -108,293 +108,54 @@ The agent implements a sophisticated voice processing pipeline:
 | VAD | Silero | - | Voice activity detection |
 | Image Gen | Custom | Stable Diffusion | Scene visualization |
 
-### Voice Models by Language
+## Context Management System
 
-The agent uses optimized voice models for each supported language:
+The agent employs a sophisticated context management system to maintain coherent and immersive RPG narratives across extended gameplay sessions.
 
-| Language | Code | TTS Voice ID | Model |
-|----------|------|--------------|-------|
-| Russian | `ru` | `da05e96d-ca10-4220-9042-d8acef654fa9` | Cartesia sonic-2 |
-| English | `en` | `42b39f37-515f-4eee-8546-73e841679c1d` | Cartesia sonic-2 |
-| Dutch | `nl` | `9e8db62d-056f-47f3-b3b6-1b05767f9176` | Cartesia sonic-2 |
-| French | `fr` | `5c3c89e5-535f-43ef-b14d-f8ffe148c1f0` | Cartesia sonic-2 |
-| Spanish | `es` | `2695b6b5-5543-4be1-96d9-3967fb5e7fec` | Cartesia sonic-2 |
+### LLM Context Window Structure
 
-## Installation
+Each interaction with the LLM includes carefully structured context:
 
-### Prerequisites
+1. **System Prompt** - Game master instructions with role, rules, and response style guidelines
+2. **World Lore** - Base description of the selected game world's setting, history, and atmosphere
+3. **Latest Game Summary** - Compressed narrative of previous gameplay (generated every 6 turns)
+4. **Turn History** - Detailed conversation history since the last summary
+5. **RAG-Enhanced World Details** - Relevant chunks from detailed world lore retrieved based on current context
 
-- Python 3.11 or higher
-- LiveKit Cloud account or self-hosted LiveKit server
-- API keys for all required services (see Configuration)
+This hierarchical approach ensures the AI has comprehensive context while staying within token limits.
 
-### Local Setup
+### Image Generation Context
 
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd lk-agent
-```
+A separate context pipeline manages scene visualization:
 
-2. Create virtual environment:
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
+- **Chat History Analysis** - Current GM response and recent player actions
+- **Character Appearance** - Persistent visual description of the player's character
+- **Illustration Style** - Game-specific art style prompt for visual consistency
+- **Scene Context** - Extracted key visual elements from the current narrative moment
 
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+The StoryImageGen service processes this context to generate contextually relevant scene images that match the game's aesthetic and current narrative state.
 
-4. Download required models:
-```bash
-python main.py download-files
-```
+### Context Optimization
 
-5. Configure environment variables (see Configuration section)
+- **Automatic Summarization** - Every 6 turns, detailed history is compressed into narrative summaries
+- **Smart Context Pruning** - Old turn history is replaced with summaries to prevent token overflow
+- **RAG Integration** - Only relevant world lore chunks are included based on current gameplay
+- **Final Session Summary** - Complete game session is summarized on disconnect for next session continuity
 
-6. Start the agent:
-```bash
-python main.py start
-```
+## Features in Development
 
-### Docker Deployment
+### Multiplayer Mode (Team Games)
 
-Build and run using Docker:
+The platform is actively developing support for collaborative RPG experiences:
 
-```bash
-# Build image
-docker build -t lk-agent .
+- **Multi-user Sessions** - Multiple players in the same game room
+- **Shared World State** - Synchronized game progression across all participants
+- **Turn Management** - Coordinated player turn system for group interactions
+- **Team Dynamics** - AI game master adapts narration for group decision-making
+- **Individual Voice Channels** - Separate voice processing per player while maintaining shared context
 
-# Run container
-docker run --env-file .env lk-agent
-```
-
-## Configuration
-
-### Environment Variables
-
-Create a `.env` file in the project root with the following variables:
-
-```bash
-# LiveKit Configuration
-LIVEKIT_URL=wss://your-livekit-server.com
-LIVEKIT_API_KEY=your-api-key
-LIVEKIT_API_SECRET=your-api-secret
-
-# Backend API
-STORY_API_URL=https://your-story-api.com
-
-# AI Services
-DEEPGRAM_API_KEY=your-deepgram-key        # For STT (nova-3)
-OPENAI_API_KEY=your-openai-key            # For LLM (GPT-4o)
-CARTESIA_API_KEY=your-cartesia-key        # For TTS (sonic-2)
-```
-
-### Voice Settings
-
-The agent supports runtime voice settings updates via DataChannel:
-
-```json
-{
-  "type": "voice_settings_update",
-  "language": "en",
-  "speech_speed": 1.0
-}
-```
-
-**Supported Languages**: `en`, `ru`, `nl`, `fr`, `es`
-
-**Supported Speeds**: `0.5`, `0.75`, `1.0`, `1.5`, `1.75`
-
-## Integration Points
-
-### Story API Integration
-
-The agent communicates with story-api for:
-
-- **GET** `/api/v1/games/{game_id}` - Fetch game data and context
-- **POST** `/api/v1/turns` - Save player turns and GM responses
-- **POST** `/api/v1/summary/{game_id}/generate` - Generate conversation summaries
-- **PUT** `/api/v1/users/{user_id}` - Update user language preferences
-
-### StoryImageGen Integration
-
-Scene visualization is generated asynchronously:
-
-- **POST** `https://storyimagegen-production.up.railway.app/process_chat`
-  - Generates contextual scene images based on GM response
-  - Returns image URL for frontend display
-  - Timeout: 60 seconds
-
-### Frontend Integration (DataChannel)
-
-Real-time communication with story-front via LiveKit DataChannel:
-
-**Topics:**
-- `topic1` - Image URL delivery to frontend
-- `voice_settings_response` - Confirmation of settings updates
-
-## Development
-
-### Project Structure
-
-```
-lk-agent/
-├── main.py              # Main agent implementation
-├── voice_factory.py     # Voice component factory (legacy)
-├── requirements.txt     # Python dependencies
-├── Dockerfile          # Container configuration
-├── CLAUDE.md           # Development guidelines
-└── README.md           # This file
-```
-
-### Key Classes
-
-- **Assistant** - Main agent class extending LiveKit Agent
-- **GameData** - Pydantic model for game state
-- **UserVoiceSettings** - Voice configuration model
-
-### Development Commands
-
-```bash
-# Start agent locally
-python main.py start
-
-# Download models (run before first start)
-python main.py download-files
-
-# Run with specific log level
-LOG_LEVEL=DEBUG python main.py start
-```
-
-## Critical Requirements
-
-### Voice Pipeline Stability
-
-The voice processing pipeline is production-tested and optimized. When making changes:
-
-1. **Always consult LiveKit 1.x documentation** before modifications
-2. **Check official examples** before implementing new features
-3. **Use only official LiveKit API methods**
-4. **Do not create custom solutions** if official API exists
-
-### Migration Resources
-
-- Official documentation: https://docs.livekit.io/agents/
-- Python API Reference: https://docs.livekit.io/reference/python/v1/livekit/agents/
-- GitHub examples: https://github.com/livekit-examples/python-agents-examples
-- Migration guide: https://docs.livekit.io/agents/start/v0-migration/
-
-## Features in Detail
-
-### Multi-language Support
-
-- Automatic language detection from user settings
-- Dynamic language switching during active sessions
-- Language-specific STT/TTS configuration
-- Database persistence of user language preferences
-
-### Game State Management
-
-- Fetches game world and character data on initialization
-- Maintains conversation history across session
-- Automatic summary generation every 6 turns
-- Final summary on session end
-
-### Session Lifecycle
-
-1. **Session Start** - Fetch game data, initialize voice pipeline
-2. **Greeting** - Play intro or latest summary
-3. **Game Loop** - Process turns, generate images, save state
-4. **Session End** - Generate final summary
-
-### Turn Processing
-
-Each player turn follows this flow:
-
-1. User speaks (VAD detects speech)
-2. Speech transcribed (Deepgram STT)
-3. LLM generates response (GPT-4o with game context)
-4. Response synthesized (Cartesia TTS)
-5. Image generated async (StoryImageGen)
-6. Turn saved to database (story-api)
-7. Image sent to frontend (DataChannel)
-
-## Monitoring and Logging
-
-The agent provides comprehensive logging for debugging:
-
-- Voice pipeline events (VAD, STT, TTS states)
-- Session lifecycle (connection, participants, tracks)
-- Turn processing (user input, LLM response, image generation)
-- API communication (requests, responses, errors)
-- Language switching (settings updates, component recreation)
-
-Log levels: DEBUG, INFO, WARNING, ERROR
-
-## Performance Considerations
-
-### Latency Optimization
-
-- VAD prewarming on process start
-- Async image generation (non-blocking)
-- Streaming LLM responses for faster TTS start
-- Multilingual STT model (no language switching delay)
-
-### Resource Management
-
-- Turn detection timing: 1.2s min, 8.0s max endpointing delay
-- Summary generation every 6 turns (prevents context overflow)
-- Session cleanup on disconnect
-- Graceful error handling and fallbacks
-
-## Troubleshooting
-
-### Common Issues
-
-**Agent not responding:**
-- Check LiveKit connection status
-- Verify all API keys are valid
-- Ensure room name matches game ID
-
-**Wrong language:**
-- Check user settings in database
-- Verify DataChannel message format
-- Review language validation in logs
-
-**No images generated:**
-- Check StoryImageGen service status
-- Verify timeout settings (60s)
-- Review image generation logs
-
-**Audio quality issues:**
-- Check VAD sensitivity settings
-- Verify turn detection timing
-- Review STT/TTS model configurations
-
-## Contributing
-
-This is part of the aiworlds.online experimental platform. When contributing:
-
-1. Follow existing code style and conventions
-2. Update CLAUDE.md with new requirements
-3. Test voice pipeline changes thoroughly
-4. Document API integration changes
-5. Maintain compatibility with LiveKit 1.x
-
-## License
-
-[Add your license information here]
-
-## Contact & Support
-
-For issues related to:
-- **lk-agent** - [Repository Issues]
-- **aiworlds.online platform** - [Platform Contact]
-- **LiveKit** - https://livekit.io/support
+This feature will enable cooperative storytelling where multiple players can interact with the same AI game master in real-time.
 
 ---
 
-Built with LiveKit Agents SDK | Part of aiworlds.online ecosystem
+**Built with LiveKit Agents SDK | Part of aiworlds.online ecosystem**
