@@ -19,6 +19,9 @@ The aiworlds.online ecosystem consists of several interconnected services:
 
 **lk-agent** is a real-time voice agent built on [LiveKit Agents SDK](https://docs.livekit.io/agents/) that powers interactive RPG experiences with AI-driven game master narration. The agent processes player voice input, generates contextual responses using LLM, and delivers natural speech output in multiple languages.
 
+![Home Screen](screenshots/homescreen.png)
+*aiworlds.online platform home screen with game world selection*
+
 ### Key Features
 
 - **Real-time Voice Interaction** - Seamless voice-to-voice communication with sub-second latency
@@ -28,6 +31,9 @@ The aiworlds.online ecosystem consists of several interconnected services:
 - **Scene Visualization** - Automatic generation of scene images for each turn
 - **Intelligent Context Management** - RAG-powered world lore integration with conversation summaries
 - **Persistent Game State** - Integration with backend API for game progression tracking
+
+![Voice Settings](screenshots/voice_settings.png)
+*Dynamic language and speech speed settings available during gameplay*
 
 ## Architecture
 
