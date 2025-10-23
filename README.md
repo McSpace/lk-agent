@@ -22,6 +22,8 @@ The aiworlds.online ecosystem consists of several interconnected services:
 ![Home Screen](screenshots/homescreen.png)
 *aiworlds.online platform home screen with game world selection*
 
+Try Live Demo [AIWorlds.online](https://AIWorlds.online/)
+
 ### Key Features
 
 - **Real-time Voice Interaction** - Seamless voice-to-voice communication with sub-second latency
@@ -68,10 +70,10 @@ The agent implements a sophisticated voice processing pipeline:
 ┌─────────────────────────────────────────────────────────────────┐
 │                        aiworlds.online                          │
 │                                                                 │
-│  ┌────────────────┐      ┌───────────────┐      ┌──────────┐  │
-│  │  story-front   │◀────▶│   lk-agent    │◀────▶│story-api │  │
-│  │   (Web UI)     │      │ (Voice Agent) │      │(Backend) │  │
-│  └────────────────┘      └───────────────┘      └──────────┘  │
+│  ┌────────────────┐      ┌───────────────┐      ┌──────────┐    │
+│  │  story-front   │◀────▶│   lk-agent    │◀────▶│story-api │    │
+│  │   (Web UI)     │      │ (Voice Agent) │      │(Backend) │    │
+│  └────────────────┘      └───────────────┘      └──────────┘    │
 │         │                        │                     │        │
 │         │                        │                     │        │
 │         │                        ▼                     │        │
@@ -80,9 +82,9 @@ The agent implements a sophisticated voice processing pipeline:
 │                        │ (Image AI)       │                     │
 │                        └──────────────────┘                     │
 │                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │               LiveKit Server (Real-time Media)           │  │
-│  └──────────────────────────────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │               LiveKit Server (Real-time Media)           │   │
+│  └──────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
