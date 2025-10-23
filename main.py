@@ -766,7 +766,7 @@ class Assistant(Agent):
     #     return f"Action '{action_description}' saved to game history"
 
     async def handle_imagegen_api(self, gm_text, last_turn_id, user_text):
-        """Фоновая обработка генерации и отправки картинки"""
+        """Background processing of image generation and sending"""
         logger.info(f"🎨 handle_imagegen_api STARTED")
         logger.info(f"  GM text type: {type(gm_text)}")
         logger.info(f"  GM text preview: '{str(gm_text)[:100]}...'")
@@ -778,40 +778,40 @@ class Assistant(Agent):
         image_prompt = ""
 
         try:
-            # Конвертируем сообщение в правильный формат для API
+            # Convert message to correct format for API
             if isinstance(gm_text, list):
                 gm_text = gm_text[0] if len(gm_text) > 0 else ""
             gm_text = str(gm_text)
-            
-            # Создаем простую структуру для API (не объект ChatMessage)
+
+            # Create simple structure for API (not ChatMessage object)
             chat_history_for_api = {"content": gm_text}
             logger.info(f"🌐 CALLING StoryImageGen API")
             logger.info(f"  API payload structure: {chat_history_for_api}")
             logger.info(f"  Game data for API: illustration_style='{self.game_data.image_style_prompt if self.game_data else 'None'}'")
             logger.info(f"  Game data for API: character_appearance='{self.game_data.character_appearance if self.game_data else 'None'}'")
 
-            # Генерируем картинку асинхронно
+            # Generate image async
             result = await send_to_imageGen_api(chat_history_for_api, last_turn_id, self.game_data)
-            
+
             if result:
                 image_url = result.get('image_url', '')
                 image_prompt = result.get('illustration_prompt', '')
 
                 if image_url:
-                    # Сохраняем в userdata для логирования
+                    # Save in userdata for logging
                     self.ctx.proc.userdata["pic_url"] = image_url
                     self.ctx.proc.userdata["image_prompt"] = image_prompt
-                    
-                    # Проверяем, есть ли участники в комнате перед отправкой
+
+                    # Check if there are participants in room before sending
                     participants_count = len(self.ctx.room.remote_participants)
                     logger.info(f"🔍 Room has {participants_count} remote participants")
-                    
-                    # Отправляем картинку на фронтенд через DataChannel
+
+                    # Send image to frontend via DataChannel
                     try:
                         await self.ctx.room.local_participant.publish_data(
                             image_url.encode('utf-8'),
                             reliable=True,
-                            topic="topic1"  # Фронтенд слушает этот topic
+                            topic="topic1"  # Frontend listens to this topic
                         )
                         logger.info(f"🖼️ Image sent to frontend via DataChannel: {image_url}")
                         logger.info(f"📡 DataChannel message size: {len(image_url.encode('utf-8'))} bytes")
@@ -819,18 +819,18 @@ class Assistant(Agent):
                         logger.error(f"❌ Failed to send image via DataChannel: {e}")
         except Exception as e:
             logger.error(f"❌ ImageGen API error: {e}")
-        
-        # ВСЕГДА сохраняем ход (с картинкой если есть, без если нет)
+
+        # ALWAYS save turn (with image if available, without if not)
         try:
             if self.game_data and self.game_data.game:
                 await save_next_turn_api(user_text, gm_text, str(self.game_data.game.id), image_url, image_prompt)
                 logger.info("📊 Turn saved with image data")
-                
-                # Увеличиваем счетчик ходов и проверяем нужно ли генерировать саммари
+
+                # Increment turn counter and check if summary generation is needed
                 self.turn_counter += 1
                 logger.info(f"🔢 Turn counter: {self.turn_counter}")
-                
-                # Генерируем саммари каждые 6 ходов
+
+                # Generate summary every 6 turns
                 if self.turn_counter % 6 == 0:
                     logger.info(f"📝 Generating summary after {self.turn_counter} turns")
                     summary_success = await generate_summary_api(str(self.game_data.game.id))
@@ -838,24 +838,24 @@ class Assistant(Agent):
                         logger.info("✅ Auto-summary generation completed")
                     else:
                         logger.warning("⚠️ Auto-summary generation failed")
-                        
+
         except Exception as e:
             logger.error(f"❌ Turn save error: {e}")
 
     async def save_turn_background(self, user_text: str, agent_text: str):
-        """Фоновое сохранение хода без картинки"""
+        """Background turn save without image"""
         if self.game_data and self.game_data.game:
             await save_next_turn_api(user_text, agent_text, str(self.game_data.game.id))
 
     async def _save_and_generate_image(self, user_message: str, agent_message: str):
-        """Сохраняет ход и генерирует картинку при необходимости"""
+        """Saves turn and generates image if needed"""
         try:
             logger.info(f"🎨 _save_and_generate_image CALLED")
             logger.info(f"  User message type: {type(user_message)}")
             logger.info(f"  Agent message type: {type(agent_message)}")
             logger.info(f"  Game data available: {bool(self.game_data)}")
 
-            # Исправляем формат сообщений - конвертируем массивы в строки
+            # Fix message format - convert arrays to strings
             if isinstance(agent_message, list):
                 agent_message = agent_message[0] if len(agent_message) > 0 else ""
                 logger.info(f"  Agent message extracted from list: '{agent_message[:50]}...'")
@@ -863,7 +863,7 @@ class Assistant(Agent):
                 user_message = user_message[0] if len(user_message) > 0 else ""
                 logger.info(f"  User message extracted from list: '{user_message[:50]}...'")
 
-            # Убеждаемся что это строки
+            # Ensure these are strings
             agent_message = str(agent_message)
             user_message = str(user_message)
 
@@ -871,33 +871,33 @@ class Assistant(Agent):
             logger.info(f"  User: '{user_message[:50]}...' (length: {len(user_message)})")
             logger.info(f"  Agent: '{agent_message[:50]}...' (length: {len(agent_message)})")
 
-            # НЕ сохраняем ход сразу - ждем генерации картинки
+            # DO NOT save turn immediately - wait for image generation
             # import asyncio
             # asyncio.create_task(self.save_turn_background(user_message, agent_message))
             # logger.info("📊 Turn saved successfully")
 
-            # Генерируем картинку на каждом ходе - сохранение произойдет там
+            # Generate image on each turn - save will happen there
             import uuid
             turn_id = str(uuid.uuid4())
             logger.info("🎨 LAUNCHING handle_imagegen_api TASK")
             logger.info(f"  Turn ID: {turn_id}")
             logger.info(f"  Will call: handle_imagegen_api(agent_message, turn_id, user_msg)")
 
-            # Используем сохраненное пользовательское сообщение
+            # Use saved user message
             user_msg = getattr(self, 'last_user_message', user_message)
             logger.info(f"  Using user_msg: '{user_msg[:50]}...'")
 
             import asyncio
             asyncio.create_task(self.handle_imagegen_api(agent_message, turn_id, user_msg))
-                
+
         except Exception as e:
             logger.error(f"❌ Save and generate error: {e}")
 
-    # Удален неиспользуемый метод _trigger_turn_save_and_image
+    # Removed unused method _trigger_turn_save_and_image
 
 
 def prewarm(proc: JobProcess):
-    """Предзагрузка моделей"""
+    """Model prewarming"""
     proc.userdata["vad"] = silero.VAD.load()
     logger.info("🔥 Models prewarmed")
 
@@ -908,7 +908,7 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"🔗 Connected to room: {ctx.room.name}")
     logger.info(f"🎯 Room participants: {len(ctx.room.remote_participants)}")
     
-    # Логируем существующих участников
+    # Log existing participants
     for participant in ctx.room.remote_participants.values():
         logger.info(f"👤 Existing participant: {participant.identity}")
         for track_pub in participant.track_publications.values():
@@ -917,24 +917,24 @@ async def entrypoint(ctx: JobContext):
     game_id = ctx.room.name
     game_data = await get_game_data(game_id)
 
-    # Создаем дефолтные настройки пользователя 
-    # ВАЖНО: user settings имеют приоритет над game_data.user_lang
+    # Create default user settings
+    # IMPORTANT: user settings have priority over game_data.user_lang
     user_voice_settings = UserVoiceSettings()
     if game_data:
-        # Используем язык из данных игры как дефолтный ТОЛЬКО если он поддерживается
+        # Use language from game data as default ONLY if supported
         default_lang = game_data.user_lang if game_data.user_lang in VoiceComponentFactory.get_supported_languages() else "en"
         user_voice_settings.language = default_lang
         logger.info(f"🌐 Default language from game data: {user_voice_settings.language}")
         logger.info(f"📋 Note: User settings via DataChannel will override this default")
-    
+
     assistant = Assistant(game_data, ctx, user_voice_settings)
 
     try:
         session = AgentSession(
             stt=create_stt_for_language(user_voice_settings.language),
-            llm=openai.LLM(model="gpt-4o"),  # Используем более мощную модель для RPG агента
+            llm=openai.LLM(model="gpt-4o"),  # Use more powerful model for RPG agent
             tts=create_cartesia_tts(
-                user_voice_settings.language, 
+                user_voice_settings.language,
                 user_voice_settings.speech_speed
             ),
             # tts=elevenlabs.TTS(
@@ -947,11 +947,11 @@ async def entrypoint(ctx: JobContext):
             #     #         use_speaker_boost=True
             #     #     )
             #     ),
-            
+
             vad=ctx.proc.userdata["vad"],
             turn_detection=MultilingualModel(),
-            min_endpointing_delay=1.2,  # Увеличено с 0.4 до 1.2 сек для предотвращения разбиения сообщений
-            max_endpointing_delay=8.0,  # Увеличено с 6.0 до 8.0 сек
+            min_endpointing_delay=1.2,  # Increased from 0.4 to 1.2 sec to prevent message splitting
+            max_endpointing_delay=8.0,  # Increased from 6.0 to 8.0 sec
         )
         logger.info("AgentSession created with turn detection config: min_delay=1.2s, max_delay=8.0s")
         
@@ -985,8 +985,8 @@ async def entrypoint(ctx: JobContext):
         logger.info(f"🎵 Track subscribed: {track.sid} from participant {participant.identity}")
         logger.info(f"🎵 Track kind: {track.kind}, source: {track.source}")
 
-    # Основные события теперь обрабатываются через on_user_turn_completed в Assistant классе
-    # Оставляем только вспомогательные события для отладки
+    # Main events are now handled through on_user_turn_completed in Assistant class
+    # Keep only auxiliary events for debugging
 
     @session.on("user_started_speaking")
     def on_user_started_speaking():
@@ -1001,7 +1001,7 @@ async def entrypoint(ctx: JobContext):
         for func in called_functions:
             logger.info(f"⚙️ Function called: {func.call_info.function_info.name}")
     
-    # События для отладки (могут не срабатывать в новой архитектуре)
+    # Events for debugging (may not work in new architecture)
     @session.on("user_message") 
     def on_user_message(msg):
         logger.info(f"🔍 Debug: user_message event - {msg}")
@@ -1018,7 +1018,7 @@ async def entrypoint(ctx: JobContext):
     def on_agent_stopped_speaking():
         logger.info("🔇 Agent stopped speaking")
         
-    # Пробуем разные варианты событий для сообщений
+    # Try different event variants for messages
     @session.on("user_speech_transcribed")
     def on_user_speech_transcribed(msg):
         logger.info(f"📝 User speech transcribed: {msg}")
@@ -1031,17 +1031,17 @@ async def entrypoint(ctx: JobContext):
     def on_conversation_turn_finished(turn):
         logger.info(f"🔄 Conversation turn finished: {turn}")
         
-    # Попробуем отловить все неизвестные события
+    # Try to catch all unknown events
     def log_all_events(event_name, *args, **kwargs):
         logger.info(f"🔍 Unknown event: {event_name} with args: {args}")
         
-    # Добавляем универсальный обработчик (если поддерживается)
+    # Add universal handler (if supported)
     try:
         session.on("*", log_all_events)
     except:
         pass
 
-    # Убираем потенциально проблемные обработчики событий
+    # Remove potentially problematic event handlers
     # @session.on("vad_state_changed")
     # def on_vad_state_changed(ev):
     #     logger.info(f"🎙️ VAD state changed: {ev}")
@@ -1054,27 +1054,27 @@ async def entrypoint(ctx: JobContext):
     # def on_stt_finished():
     #     logger.info("📝 STT finished processing")
 
-    # Убираем старый обработчик conversation_item_added - теперь используем llm_node для раннего перехвата
+    # Remove old conversation_item_added handler - now using llm_node for early capture
     # @session.on("conversation_item_added")
     # def on_conversation_item_added(event: ConversationItemAddedEvent):
-    #     """Старый событийный обработчик - заменен на llm_node перехват"""
+    #     """Old event handler - replaced by llm_node capture"""
     #     logger.info("🔍 conversation_item_added event (replaced by llm_node early capture)")
 
-    # DataChannel обработчик для получения настроек от фронтенда
+    # DataChannel handler for receiving settings from frontend
     @ctx.room.on("data_received")
     def on_data_received(data):
-        """Обработка DataChannel сообщений от фронтенда"""
+        """Process DataChannel messages from frontend"""
         try:
-            # Декодируем JSON данные
+            # Decode JSON data
             message = json.loads(data.data.decode('utf-8'))
             logger.info(f"📡 DataChannel message received: {message}")
-            
-            # Обрабатываем обновление настроек голоса
+
+            # Process voice settings update
             if message.get("type") == "voice_settings_update":
                 new_language = message.get("language")
                 new_speed = message.get("speech_speed")
                 
-                # Детальное логирование запроса
+                # Detailed request logging
                 logger.info(f"🎯 Voice settings update requested:")
                 logger.info(f"  📥 Requested language: {new_language}")
                 logger.info(f"  📥 Requested speed: {new_speed}")
@@ -1082,7 +1082,7 @@ async def entrypoint(ctx: JobContext):
                 logger.info(f"  🔍 Current speed: {assistant.voice_settings.speech_speed}")
                 
                 if new_language or new_speed:
-                    # Обновляем настройки через assistant
+                    # Update settings through assistant
                     current_language = assistant.voice_settings.language if new_language is None else new_language
                     current_speed = assistant.voice_settings.speech_speed if new_speed is None else new_speed
                     
@@ -1090,15 +1090,15 @@ async def entrypoint(ctx: JobContext):
                     logger.info(f"  🎌 Target language: {current_language}")  
                     logger.info(f"  ⚡ Target speed: {current_speed}")
                     
-                    # Запускаем обновление асинхронно
+                    # Run update asynchronously
                     async def update_and_confirm():
                         try:
-                            # Сохраняем старый язык для проверки изменений
+                            # Save old language to check for changes
                             old_language = assistant.voice_settings.language
                             
                             await assistant.update_voice_settings(current_language, current_speed)
                             
-                            # Сохраняем новый язык в базу данных через API если он изменился
+                            # Save new language to database via API if it changed
                             if assistant.game_data and new_language and old_language != assistant.voice_settings.language:
                                 try:
                                     user_id = str(assistant.game_data.game.user_id)
@@ -1116,10 +1116,10 @@ async def entrypoint(ctx: JobContext):
                                 except Exception as db_error:
                                     logger.error(f"❌ Error updating user language in database: {db_error}")
                             
-                            # Отправляем подтверждение обратно на фронтенд
+                            # Send confirmation back to frontend
                             confirmation = {
                                 "type": "voice_settings_updated",
-                                "language": assistant.voice_settings.language,  # Используем актуальные значения
+                                "language": assistant.voice_settings.language,  # Use current values
                                 "speech_speed": assistant.voice_settings.speech_speed,
                                 "status": "success"
                             }
@@ -1133,7 +1133,7 @@ async def entrypoint(ctx: JobContext):
                         except Exception as update_error:
                             logger.error(f"❌ Error updating voice settings: {update_error}")
                             
-                            # Отправляем сообщение об ошибке
+                            # Send error message
                             error_response = {
                                 "type": "voice_settings_updated",
                                 "language": assistant.voice_settings.language,
@@ -1147,7 +1147,7 @@ async def entrypoint(ctx: JobContext):
                                 topic="voice_settings_response"
                             )
                     
-                    # Запускаем задачу
+                    # Start task
                     asyncio.create_task(update_and_confirm())
                     
                 else:
@@ -1161,13 +1161,13 @@ async def entrypoint(ctx: JobContext):
             import traceback
             logger.error(f"🔍 Traceback: {traceback.format_exc()}")
 
-    # Переменные для отслеживания состояния агента
+    # Variables for tracking agent state
     assistant.turn_counter = 0
     
-    # Сохраняем ссылку на сессию в assistant для обновления TTS компонентов
+    # Save session reference in assistant for TTS component updates
     assistant._agent_session = session
 
-    # Добавляем callback для генерации финального саммари при завершении сессии
+    # Add callback for generating final summary on session end
     async def on_session_shutdown():
         logger.info("Session ended.")
         await assistant.on_session_end()
@@ -1181,14 +1181,14 @@ async def entrypoint(ctx: JobContext):
         await session.start(agent=assistant, room=ctx.room)
         logger.info("✅ Agent session started successfully")
         
-        # Генерируем и отправляем приветствие после успешного старта сессии
+        # Generate and send greeting after successful session start
         try:
-            # Получаем приветствие/саммари
+            # Get greeting/summary
             greeting = game_data.latest_summary.summary_text if game_data and game_data.latest_summary else (
-                game_data.intro if game_data and game_data.intro else "Добро пожаловать в игру! Опишите ваши действия."
+                game_data.intro if game_data and game_data.intro else "Welcome to the game! Describe your actions."
             )
-            
-            # Если есть latest_summary - это продолжение игры
+
+            # If latest_summary exists - this is a continuing game
             if game_data and game_data.latest_summary:
                 logger.info(f"📖 Playing latest summary for continuing game: {greeting[:100]}...")
             else:
