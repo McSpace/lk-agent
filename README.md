@@ -122,6 +122,8 @@ The agent employs a sophisticated context management system to maintain coherent
 
 ### LLM Context Window Structure
 
+![Context Window Structure](screenshots/game_schema.png)
+
 Each interaction with the LLM includes carefully structured context:
 
 1. **System Prompt** - Game master instructions with role, rules, and response style guidelines
