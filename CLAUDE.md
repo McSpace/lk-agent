@@ -166,6 +166,38 @@ The project includes Docker containerization:
 
 # NEW REQUIREMENTS
 
+### [2025-11-12] Fix AgentSession initialization syntax error
+**Description**: Fixed critical syntax error in main.py line 936 where commented TTS code block caused ambiguous parameter separation in AgentSession constructor.
+**Priority**: critical
+**Affects services**: lk-agent
+**Voice pipeline changes**: no, code formatting fix only
+**API integrations**: no changes
+**Status**: implemented
+
+**Problem**:
+- Docker build failed with `SyntaxError: invalid syntax. Perhaps you forgot a comma?` at line 627 (now 936)
+- Commented `elevenlabs.TTS()` block left ambiguous blank line before `vad` parameter
+- Python parser couldn't determine if commented section was part of function call
+
+**Solution**:
+- ✅ Removed blank line between commented TTS block and `vad` parameter
+- ✅ Ensured proper Python function call syntax
+- ✅ Docker build now passes successfully
+
+**Technical details**:
+```python
+# Before (syntax error):
+tts=create_cartesia_tts(...),
+# tts=elevenlabs.TTS(...),
+
+vad=ctx.proc.userdata["vad"],
+
+# After (fixed):
+tts=create_cartesia_tts(...),
+# tts=elevenlabs.TTS(...),
+vad=ctx.proc.userdata["vad"],
+```
+
 ### [2025-08-29] Migration to Cartesia TTS for all languages
 **Description**: Replaced mixed OpenAI/Cartesia TTS architecture with unified Cartesia sonic-2 for all supported languages. Removed complex fallback logic.
 **Priority**: high
