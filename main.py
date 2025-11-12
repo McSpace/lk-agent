@@ -947,7 +947,6 @@ async def entrypoint(ctx: JobContext):
             #     #         use_speaker_boost=True
             #     #     )
             #     ),
-
             vad=ctx.proc.userdata["vad"],
             turn_detection=MultilingualModel(),
             min_endpointing_delay=1.2,  # Increased from 0.4 to 1.2 sec to prevent message splitting
