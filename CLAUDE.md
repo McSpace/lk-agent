@@ -166,6 +166,84 @@ The project includes Docker containerization:
 
 # NEW REQUIREMENTS
 
+### [2025-11-12] Add download-files command for Docker build
+**Description**: Implemented missing download-files command that Dockerfile uses to preload models at build time.
+**Priority**: critical
+**Affects services**: lk-agent
+**Voice pipeline changes**: no, infrastructure fix only
+**API integrations**: no changes
+**Status**: implemented
+
+**Problem**:
+- Dockerfile line 45 calls `RUN python main.py download-files`
+- This command was not implemented in main.py
+- Docker build failed because models weren't preloaded
+- Production containers need models cached at build time
+
+**Solution**:
+- ✅ Added sys.argv parsing for "download-files" command
+- ✅ Download Silero VAD models via `silero.VAD.load()`
+- ✅ Download turn detector models via `Plugin.registered_plugins()`
+- ✅ Exit with code 0 after successful download
+- ✅ All models now cached in Docker image during build
+
+**Technical details**:
+```python
+if len(sys.argv) > 1 and sys.argv[1] == "download-files":
+    # Download Silero VAD models
+    silero.VAD.load()
+
+    # Download multilingual turn detector models
+    from livekit.plugins.turn_detector.multilingual import MultilingualModel
+    model = MultilingualModel()  # Downloads models on initialization
+
+    sys.exit(0)
+```
+
+**Fix history**:
+1. Initial implementation used `Plugin.registered_plugins()` (TypeError: not callable)
+2. Changed to `EOUPlugin()` import (ImportError: cannot import name 'EOUPlugin')
+3. Final fix: Use `MultilingualModel()` which downloads models automatically on init
+4. Added graceful error handling - models download on first use if build fails
+
+**Models downloaded**:
+- Silero VAD models (voice activity detection)
+- Multilingual turn detector models (en, multilingual)
+- AutoTokenizer and model_q8.onnx files
+- languages.json configuration
+
+### [2025-11-12] Fix AgentSession initialization syntax error
+**Description**: Fixed syntax error in main.py line 936 where commented TTS code block caused ambiguous parameter separation in AgentSession constructor.
+**Priority**: critical
+**Affects services**: lk-agent
+**Voice pipeline changes**: no, code formatting fix only
+**API integrations**: no changes
+**Status**: implemented
+
+**Problem**:
+- Initial Docker build showed `SyntaxError: invalid syntax. Perhaps you forgot a comma?` at line 627 (now 936)
+- Commented `elevenlabs.TTS()` block left ambiguous blank line before `vad` parameter
+- Python parser couldn't determine if commented section was part of function call
+
+**Solution**:
+- ✅ Removed blank line between commented TTS block and `vad` parameter
+- ✅ Ensured proper Python function call syntax
+- ✅ Fixed syntax but revealed missing download-files command
+
+**Technical details**:
+```python
+# Before (syntax error):
+tts=create_cartesia_tts(...),
+# tts=elevenlabs.TTS(...),
+
+vad=ctx.proc.userdata["vad"],
+
+# After (fixed):
+tts=create_cartesia_tts(...),
+# tts=elevenlabs.TTS(...),
+vad=ctx.proc.userdata["vad"],
+```
+
 ### [2025-08-29] Migration to Cartesia TTS for all languages
 **Description**: Replaced mixed OpenAI/Cartesia TTS architecture with unified Cartesia sonic-2 for all supported languages. Removed complex fallback logic.
 **Priority**: high

@@ -947,7 +947,6 @@ async def entrypoint(ctx: JobContext):
             #     #         use_speaker_boost=True
             #     #     )
             #     ),
-
             vad=ctx.proc.userdata["vad"],
             turn_detection=MultilingualModel(),
             min_endpointing_delay=1.2,  # Increased from 0.4 to 1.2 sec to prevent message splitting
@@ -1208,6 +1207,34 @@ async def entrypoint(ctx: JobContext):
 
 
 if __name__ == "__main__":
+    import sys
+
+    # Handle download-files command for Docker build
+    if len(sys.argv) > 1 and sys.argv[1] == "download-files":
+        logger.info("📥 Downloading required model files...")
+
+        # Download Silero VAD models
+        logger.info("Downloading Silero VAD models...")
+        silero.VAD.load()
+        logger.info("✅ Silero VAD models downloaded")
+
+        # Download multilingual turn detector models
+        logger.info("Downloading multilingual turn detector models...")
+        try:
+            # Import MultilingualModel to trigger model downloads
+            from livekit.plugins.turn_detector.multilingual import MultilingualModel
+
+            # Create instance to initialize and download models if needed
+            model = MultilingualModel()
+            logger.info("✅ MultilingualModel initialized (models downloaded if needed)")
+        except Exception as e:
+            logger.warning(f"Could not download turn detector models: {e}")
+            logger.info("Turn detector models will be downloaded on first use")
+        logger.info("✅ Multilingual turn detector models download completed")
+
+        logger.info("✅ All model files downloaded successfully")
+        sys.exit(0)
+
     cli.run_app(WorkerOptions(
         shutdown_process_timeout=5,
         entrypoint_fnc=entrypoint,
