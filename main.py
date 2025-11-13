@@ -1207,6 +1207,30 @@ async def entrypoint(ctx: JobContext):
 
 
 if __name__ == "__main__":
+    import sys
+
+    # Handle download-files command for Docker build
+    if len(sys.argv) > 1 and sys.argv[1] == "download-files":
+        logger.info("📥 Downloading required model files...")
+
+        # Download Silero VAD models
+        logger.info("Downloading Silero VAD models...")
+        silero.VAD.load()
+        logger.info("✅ Silero VAD models downloaded")
+
+        # Download multilingual turn detector models
+        logger.info("Downloading multilingual turn detector models...")
+        from livekit.plugins.turn_detector import Plugin
+        plugins = Plugin.registered_plugins()
+        for plugin in plugins:
+            if hasattr(plugin, 'download_files'):
+                logger.info(f"Downloading files for plugin: {plugin}")
+                plugin.download_files()
+        logger.info("✅ Multilingual turn detector models downloaded")
+
+        logger.info("✅ All model files downloaded successfully")
+        sys.exit(0)
+
     cli.run_app(WorkerOptions(
         shutdown_process_timeout=5,
         entrypoint_fnc=entrypoint,
