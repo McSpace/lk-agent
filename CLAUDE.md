@@ -166,8 +166,51 @@ The project includes Docker containerization:
 
 # NEW REQUIREMENTS
 
+### [2025-11-12] Add download-files command for Docker build
+**Description**: Implemented missing download-files command that Dockerfile uses to preload models at build time.
+**Priority**: critical
+**Affects services**: lk-agent
+**Voice pipeline changes**: no, infrastructure fix only
+**API integrations**: no changes
+**Status**: implemented
+
+**Problem**:
+- Dockerfile line 45 calls `RUN python main.py download-files`
+- This command was not implemented in main.py
+- Docker build failed because models weren't preloaded
+- Production containers need models cached at build time
+
+**Solution**:
+- ✅ Added sys.argv parsing for "download-files" command
+- ✅ Download Silero VAD models via `silero.VAD.load()`
+- ✅ Download turn detector models via `Plugin.registered_plugins()`
+- ✅ Exit with code 0 after successful download
+- ✅ All models now cached in Docker image during build
+
+**Technical details**:
+```python
+if len(sys.argv) > 1 and sys.argv[1] == "download-files":
+    # Download Silero VAD models
+    silero.VAD.load()
+
+    # Download multilingual turn detector models
+    from livekit.plugins.turn_detector import Plugin
+    plugins = Plugin.registered_plugins()
+    for plugin in plugins:
+        if hasattr(plugin, 'download_files'):
+            plugin.download_files()
+
+    sys.exit(0)
+```
+
+**Models downloaded**:
+- Silero VAD models (voice activity detection)
+- Multilingual turn detector models (en, multilingual)
+- AutoTokenizer and model_q8.onnx files
+- languages.json configuration
+
 ### [2025-11-12] Fix AgentSession initialization syntax error
-**Description**: Fixed critical syntax error in main.py line 936 where commented TTS code block caused ambiguous parameter separation in AgentSession constructor.
+**Description**: Fixed syntax error in main.py line 936 where commented TTS code block caused ambiguous parameter separation in AgentSession constructor.
 **Priority**: critical
 **Affects services**: lk-agent
 **Voice pipeline changes**: no, code formatting fix only
@@ -175,14 +218,14 @@ The project includes Docker containerization:
 **Status**: implemented
 
 **Problem**:
-- Docker build failed with `SyntaxError: invalid syntax. Perhaps you forgot a comma?` at line 627 (now 936)
+- Initial Docker build showed `SyntaxError: invalid syntax. Perhaps you forgot a comma?` at line 627 (now 936)
 - Commented `elevenlabs.TTS()` block left ambiguous blank line before `vad` parameter
 - Python parser couldn't determine if commented section was part of function call
 
 **Solution**:
 - ✅ Removed blank line between commented TTS block and `vad` parameter
 - ✅ Ensured proper Python function call syntax
-- ✅ Docker build now passes successfully
+- ✅ Fixed syntax but revealed missing download-files command
 
 **Technical details**:
 ```python
