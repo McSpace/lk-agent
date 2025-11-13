@@ -1220,18 +1220,16 @@ if __name__ == "__main__":
 
         # Download multilingual turn detector models
         logger.info("Downloading multilingual turn detector models...")
-        from livekit.plugins.turn_detector.multilingual import EOUPlugin
         try:
-            # Download multilingual models
-            eou_plugin = EOUPlugin()
-            if hasattr(eou_plugin, 'download_files'):
-                logger.info("Downloading EOUPlugin models...")
-                eou_plugin.download_files()
-                logger.info("✅ EOUPlugin models downloaded")
-            else:
-                logger.info("EOUPlugin has no download_files method, skipping...")
+            # Import MultilingualModel to trigger model downloads
+            from livekit.plugins.turn_detector.multilingual import MultilingualModel
+
+            # Create instance to initialize and download models if needed
+            model = MultilingualModel()
+            logger.info("✅ MultilingualModel initialized (models downloaded if needed)")
         except Exception as e:
             logger.warning(f"Could not download turn detector models: {e}")
+            logger.info("Turn detector models will be downloaded on first use")
         logger.info("✅ Multilingual turn detector models download completed")
 
         logger.info("✅ All model files downloaded successfully")
