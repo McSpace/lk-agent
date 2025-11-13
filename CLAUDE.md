@@ -194,18 +194,17 @@ if len(sys.argv) > 1 and sys.argv[1] == "download-files":
     silero.VAD.load()
 
     # Download multilingual turn detector models
-    from livekit.plugins.turn_detector.multilingual import EOUPlugin
-    eou_plugin = EOUPlugin()
-    if hasattr(eou_plugin, 'download_files'):
-        eou_plugin.download_files()
+    from livekit.plugins.turn_detector.multilingual import MultilingualModel
+    model = MultilingualModel()  # Downloads models on initialization
 
     sys.exit(0)
 ```
 
 **Fix history**:
-- Initial implementation used `Plugin.registered_plugins()` (TypeError: not callable)
-- Fixed to directly instantiate `EOUPlugin()` and call `download_files()`
-- Added error handling with try-except for graceful failures
+1. Initial implementation used `Plugin.registered_plugins()` (TypeError: not callable)
+2. Changed to `EOUPlugin()` import (ImportError: cannot import name 'EOUPlugin')
+3. Final fix: Use `MultilingualModel()` which downloads models automatically on init
+4. Added graceful error handling - models download on first use if build fails
 
 **Models downloaded**:
 - Silero VAD models (voice activity detection)
