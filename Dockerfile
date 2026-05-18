@@ -41,7 +41,8 @@ RUN python -m pip install --user --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# ensure that any dependent models are downloaded at build-time
+# Pre-download models at build time to avoid runtime downloads
+# This ensures the agent works in environments without internet access
 RUN python main.py download-files
 
 # Run the application.

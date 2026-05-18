@@ -135,6 +135,7 @@ class GameData(BaseModel):
     world_description: str
     character_description: str
     character_appearance: Optional[str]
+    character_reference_image_url: Optional[str] = None
     image_style_prompt: Optional[str]
     intro: Optional[str]
     latest_summary: Optional[GameSummary]
@@ -156,6 +157,39 @@ async def get_game_data(game_id: str) -> Optional[GameData]:
         logger.error(f"Error fetching game data: {e}")
         return None
 
+async def get_intro_instruction(game_id: str) -> Optional[str]:
+    """Получает инструкцию для генерации intro из API"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = f"{os.getenv('STORY_API_URL')}/api/v1/games/{game_id}/intro-instruction"
+            async with session.get(url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get("instruction")
+                logger.error(f"Failed to fetch intro instruction: {response.status}")
+                return None
+    except Exception as e:
+        logger.error(f"Error fetching intro instruction: {e}")
+        return None
+
+async def save_intro(game_id: str, intro: str) -> bool:
+    """Сохраняет intro, API автоматически генерирует title"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = f"{os.getenv('STORY_API_URL')}/api/v1/games/{game_id}/intro"
+            async with session.patch(url, json={"intro": intro}) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    logger.info(f"✅ Intro saved, title generated: {data.get('title', 'N/A')}")
+                    return True
+                else:
+                    error_text = await response.text()
+                    logger.error(f"Failed to save intro: {response.status} - {error_text}")
+                    return False
+    except Exception as e:
+        logger.error(f"Error saving intro: {e}")
+        return False
+
 async def send_to_imageGen_api(message_data, turn_id, game_data: GameData):
     """Async image generation for game scene"""
     try:
@@ -163,6 +197,9 @@ async def send_to_imageGen_api(message_data, turn_id, game_data: GameData):
         logger.info(f"  Message data type: {type(message_data)}")
         logger.info(f"  Turn ID: {turn_id}")
         logger.info(f"  Game data: {bool(game_data)}")
+
+        ref_url = getattr(game_data, "character_reference_image_url", None)
+        use_fal_edit = bool(ref_url)
 
         async with aiohttp.ClientSession() as session:
             # Fix format to match API schema
@@ -172,6 +209,14 @@ async def send_to_imageGen_api(message_data, turn_id, game_data: GameData):
                 "main_character": game_data.character_appearance or "adventurer",  # Fallback if None
                 "file_name": turn_id  # Use turn_id as file_name
             }
+            if use_fal_edit:
+                payload["provider"] = "fal_ai"
+                payload["model"] = "fal-ai/flux-2/klein/9b/edit"
+                payload["image_urls"] = [ref_url]
+
+            logger.info(f"  Mode: {'fal_ai edit' if use_fal_edit else 'together_ai default'}")
+            if use_fal_edit:
+                logger.info(f"  Reference image URL: {ref_url}")
 
             logger.info(f"🌐 HTTP REQUEST to StoryImageGen")
             logger.info(f"  Method: POST")
@@ -643,33 +688,55 @@ class Assistant(Agent):
             full_response = ''.join(current_response_chunks)
             logger.info(f"📝 llm_node completed - response: '{full_response[:100]}...' (length: {len(full_response)})")
 
+            # Check if this is a new game (intro generation) or a regular turn
+            is_new_game_intro = (not self.pending_user_message and
+                                 self.game_data and
+                                 (not self.game_data.intro or self.game_data.intro == ""))
+
             # Detailed logging of each condition for diagnostics
             logger.info(f"🔍 DETAILED Save conditions check:")
             logger.info(f"  is_last_chunk: {is_last_chunk} (required: True)")
-            logger.info(f"  pending_user_message exists: {bool(self.pending_user_message)} (required: True)")
+            logger.info(f"  pending_user_message exists: {bool(self.pending_user_message)}")
             logger.info(f"  pending_user_message content: '{self.pending_user_message[:50] if self.pending_user_message else 'None'}...'")
             logger.info(f"  early_save_triggered: {self.early_save_triggered} (required: False)")
-            logger.info(f"  ALL CONDITIONS MET: {is_last_chunk and self.pending_user_message and not self.early_save_triggered}")
+            logger.info(f"  is_new_game_intro: {is_new_game_intro}")
 
-            # If this is last chunk AND we have pending user message - save immediately
-            if is_last_chunk and self.pending_user_message and not self.early_save_triggered:
-                logger.info("✅ ALL CONDITIONS MET - TRIGGERING IMAGE GENERATION")
-                self.early_save_triggered = True
-                logger.info(f"📄 Full agent response: {full_response}")
-                logger.info("⚡ Immediate save triggered - calling _save_turn_immediately")
+            # If last chunk - save either a normal turn or a new-game intro
+            if is_last_chunk and not self.early_save_triggered:
+                if self.pending_user_message:
+                    # Normal game turn
+                    logger.info("✅ NORMAL TURN - TRIGGERING SAVE AND IMAGE GENERATION")
+                    self.early_save_triggered = True
+                    logger.info(f"📄 Full agent response: {full_response}")
+                    logger.info("⚡ Immediate save triggered - calling _save_turn_immediately")
 
-                # Run save and image generation immediately
-                import asyncio
-                asyncio.create_task(self._save_turn_immediately(self.pending_user_message, full_response))
-                self.pending_user_message = None  # Clear to avoid duplication
+                    import asyncio
+                    asyncio.create_task(self._save_turn_immediately(self.pending_user_message, full_response))
+                    self.pending_user_message = None
+
+                elif is_new_game_intro:
+                    # New-game intro
+                    logger.info("✅ NEW GAME INTRO - TRIGGERING SAVE AND IMAGE GENERATION")
+                    self.early_save_triggered = True
+                    logger.info(f"📄 Generated intro: {full_response[:100]}...")
+
+                    import asyncio
+                    # Save intro (title is auto-generated server-side)
+                    asyncio.create_task(save_intro(str(self.game_data.game.id), full_response))
+
+                    # Generate scene image for the intro
+                    asyncio.create_task(self._save_turn_immediately("START_OF_GAME", full_response))
+
+                else:
+                    logger.warning("❌ CONDITIONS NOT MET - NO SAVE/IMAGE GENERATION")
             else:
                 logger.warning("❌ CONDITIONS NOT MET - NO IMAGE GENERATION")
                 if not is_last_chunk:
                     logger.warning("  → Missing: is_last_chunk=False")
-                if not self.pending_user_message:
-                    logger.warning("  → Missing: no pending_user_message")
                 if self.early_save_triggered:
                     logger.warning("  → Blocked: early_save_triggered=True")
+                if not self.pending_user_message and not is_new_game_intro:
+                    logger.warning("  → Missing: neither user message nor new game intro")
 
             # Summary state logging for diagnostics
             logger.info(f"📋 LLM_NODE SUMMARY:")
@@ -1183,23 +1250,53 @@ async def entrypoint(ctx: JobContext):
         
         # Generate and send greeting after successful session start
         try:
-            # Get greeting/summary
-            greeting = game_data.latest_summary.summary_text if game_data and game_data.latest_summary else (
-                game_data.intro if game_data and game_data.intro else "Welcome to the game! Describe your actions."
-            )
+            # Decide: new game (streaming intro) vs continuation (summary / saved intro)
+            if game_data and (not game_data.intro or game_data.intro == ""):
+                # New game — generate intro via LLM streaming
+                logger.info("🆕 New game detected - generating intro via LLM streaming")
 
-            # If latest_summary exists - this is a continuing game
-            if game_data and game_data.latest_summary:
-                logger.info(f"📖 Playing latest summary for continuing game: {greeting[:100]}...")
+                intro_instruction = await get_intro_instruction(game_id)
+                if not intro_instruction:
+                    logger.error("❌ Failed to get intro instruction, using fallback")
+                    await session.say("Welcome to the game!")
+                else:
+                    logger.info(f"📝 Received intro instruction, starting streaming generation")
+
+                    # Stream the intro; saving and image generation happen in llm_node
+                    speech_handle = await session.generate_reply(
+                        instructions=intro_instruction,
+                        allow_interruptions=True
+                    )
+
+                    logger.info("🎙️ Intro streaming started")
+
+                    # Wait for playout (LiveKit 1.x: join() returns asyncio.Future)
+                    await speech_handle.join()
+
+                    logger.info(f"✅ Intro generation and playout completed")
+                    logger.info(f"💾 Intro text saved and image generated by llm_node")
+
+            elif game_data and game_data.latest_summary:
+                # Continuing game — play summary
+                logger.info(f"📖 Continuing game - playing summary")
+                await session.say(game_data.latest_summary.summary_text)
+                logger.info("✅ Summary delivered successfully")
+
+            elif game_data and game_data.intro:
+                # Pre-existing game with stored intro
+                logger.info(f"📢 Existing game - playing intro")
+                await session.say(game_data.intro)
+                logger.info("✅ Intro delivered successfully")
+
             else:
-                logger.info(f"📢 Sending intro greeting for new game: {greeting[:100]}...")
-            
-            logger.info("🔊 Sending greeting via session.say()")
-            await session.say(greeting)
-            logger.info("✅ Greeting delivered successfully")
-            
+                # Fallback
+                logger.warning("⚠️ No game data available, using default greeting")
+                await session.say("Welcome to the game!")
+
         except Exception as greeting_error:
             logger.error(f"❌ Failed to send greeting: {greeting_error}")
+            import traceback
+            logger.error(f"🔍 Traceback: {traceback.format_exc()}")
         
     except Exception as e:
         logger.error(f"Failed to start agent session: {e}")
@@ -1208,6 +1305,54 @@ async def entrypoint(ctx: JobContext):
 
 
 if __name__ == "__main__":
+    import sys
+
+    # Handle download-files command for Docker build
+    if len(sys.argv) > 1 and sys.argv[1] == "download-files":
+        logger.info("📥 Downloading required models for offline usage...")
+
+        # Download Silero VAD models
+        try:
+            logger.info("⏬ Downloading Silero VAD models...")
+            _ = silero.VAD.load()
+            logger.info("✅ Silero VAD models downloaded")
+        except Exception as e:
+            logger.error(f"❌ Failed to download Silero VAD: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+
+        # Download multilingual turn detector models using plugin API
+        try:
+            logger.info("⏬ Downloading multilingual turn detector models...")
+            from livekit.plugins import turn_detector
+            from livekit.agents import Plugin
+
+            # Get the registered plugins (it's a list property, not a method)
+            plugins = Plugin.registered_plugins
+            logger.info(f"Found {len(plugins)} registered plugins")
+
+            for plugin in plugins:
+                logger.info(f"Checking plugin: {plugin.package}")
+                if 'turn_detector' in plugin.package:
+                    logger.info(f"Found turn detector plugin: {plugin.package}")
+                    plugin.download_files()
+                    logger.info("✅ Multilingual turn detector models downloaded")
+                    break
+            else:
+                logger.warning("⚠️ Turn detector plugin not found in registered plugins")
+
+        except Exception as e:
+            logger.error(f"❌ Failed to download turn detector: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+
+        # Download Deepgram and Cartesia models (they don't need pre-download, API-based)
+        logger.info("ℹ️ Deepgram and Cartesia are API-based, no pre-download needed")
+
+        logger.info("✅ All models downloaded successfully!")
+        sys.exit(0)
+
+    # Normal agent startup
     cli.run_app(WorkerOptions(
         shutdown_process_timeout=5,
         entrypoint_fnc=entrypoint,

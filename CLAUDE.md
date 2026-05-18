@@ -166,6 +166,20 @@ The project includes Docker containerization:
 
 # NEW REQUIREMENTS
 
+### [2026-05-18] Character reference picture → fal.ai edit mode
+**Description**: `GameData` now carries `character_reference_image_url` from `GET /api/v1/games/{game_id}` (new field in story-api). `send_to_imageGen_api()` switches StoryImageGen to `provider="fal_ai"` + `model="fal-ai/flux-2/klein/9b/edit"` + `image_urls=[ref_url]` when the URL is present. When absent, behavior is unchanged (StoryImageGen defaults: `together_ai` + `FLUX.2-flex`).
+**Priority**: high
+**Affects services**: lk-agent (consumer), story-api (producer), StoryImageGen (downstream)
+**Voice pipeline changes**: no
+**API integrations**: enriched POST to StoryImageGen `/process_chat` (provider/model/image_urls); story-api `GET /games/{id}` returns `character_reference_image_url`
+**Backwards compatibility**: when `reference_image_url IS NULL`, chain works as before
+**Status**: implemented
+
+**Implemented changes**:
+- ✅ `GameData.character_reference_image_url: Optional[str] = None`
+- ✅ Conditional payload enrichment in `send_to_imageGen_api()` (fal_ai/model/image_urls) + mode logging
+- ✅ Rollback panic-button: `UPDATE characters SET reference_image_url = NULL` instantly reverts to default path without redeploy
+
 ### [2025-08-29] Migration to Cartesia TTS for all languages
 **Description**: Replaced mixed OpenAI/Cartesia TTS architecture with unified Cartesia sonic-2 for all supported languages. Removed complex fallback logic.
 **Priority**: high
