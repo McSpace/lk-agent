@@ -135,6 +135,7 @@ class GameData(BaseModel):
     world_description: str
     character_description: str
     character_appearance: Optional[str]
+    character_reference_image_url: Optional[str] = None
     image_style_prompt: Optional[str]
     intro: Optional[str]
     latest_summary: Optional[GameSummary]
@@ -197,6 +198,9 @@ async def send_to_imageGen_api(message_data, turn_id, game_data: GameData):
         logger.info(f"  Turn ID: {turn_id}")
         logger.info(f"  Game data: {bool(game_data)}")
 
+        ref_url = getattr(game_data, "character_reference_image_url", None)
+        use_fal_edit = bool(ref_url)
+
         async with aiohttp.ClientSession() as session:
             # Исправляем формат для соответствия API схеме
             payload = {
@@ -205,6 +209,14 @@ async def send_to_imageGen_api(message_data, turn_id, game_data: GameData):
                 "main_character": game_data.character_appearance or "adventurer",  # Fallback если None
                 "file_name": turn_id  # Используем turn_id как file_name
             }
+            if use_fal_edit:
+                payload["provider"] = "fal_ai"
+                payload["model"] = "fal-ai/flux-2/klein/9b/edit"
+                payload["image_urls"] = [ref_url]
+
+            logger.info(f"  Mode: {'fal_ai edit' if use_fal_edit else 'together_ai default'}")
+            if use_fal_edit:
+                logger.info(f"  Reference image URL: {ref_url}")
 
             logger.info(f"🌐 HTTP REQUEST to StoryImageGen")
             logger.info(f"  Method: POST")
