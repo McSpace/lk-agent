@@ -42,10 +42,12 @@ RUN python -m pip install --user --no-cache-dir -r requirements.txt
 COPY . .
 
 # Pre-download models at build time to avoid runtime downloads.
-# Direct instantiation triggers HuggingFace downloads into the appuser HF cache.
-# (Custom `main.py download-files` was fragile across LiveKit versions.)
-RUN python -c "from livekit.plugins import silero; silero.VAD.load()"
-RUN python -c "from livekit.plugins.turn_detector.multilingual import MultilingualModel; MultilingualModel()"
+# `python main.py download-files` is the standard LiveKit Agents 1.x CLI
+# subcommand handled by cli.run_app(WorkerOptions(...)). It iterates over
+# all plugins imported by main.py and invokes their downloaders without
+# requiring a job context. (Direct `MultilingualModel()` instantiation does
+# NOT work at build time — it needs a job context in v1.1.x.)
+RUN python main.py download-files
 
 # Run the application.
 ENTRYPOINT ["python", "main.py"]
