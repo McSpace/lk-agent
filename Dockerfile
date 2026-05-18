@@ -41,9 +41,11 @@ RUN python -m pip install --user --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Pre-download models at build time to avoid runtime downloads
-# This ensures the agent works in environments without internet access
-RUN python main.py download-files
+# Pre-download models at build time to avoid runtime downloads.
+# Direct instantiation triggers HuggingFace downloads into the appuser HF cache.
+# (Custom `main.py download-files` was fragile across LiveKit versions.)
+RUN python -c "from livekit.plugins import silero; silero.VAD.load()"
+RUN python -c "from livekit.plugins.turn_detector.multilingual import MultilingualModel; MultilingualModel()"
 
 # Run the application.
 ENTRYPOINT ["python", "main.py"]

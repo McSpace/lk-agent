@@ -1307,54 +1307,9 @@ async def entrypoint(ctx: JobContext):
 
 
 if __name__ == "__main__":
-    import sys
-
-    # Handle download-files command for Docker build
-    if len(sys.argv) > 1 and sys.argv[1] == "download-files":
-        logger.info("📥 Downloading required models for offline usage...")
-
-        # Download Silero VAD models
-        try:
-            logger.info("⏬ Downloading Silero VAD models...")
-            _ = silero.VAD.load()
-            logger.info("✅ Silero VAD models downloaded")
-        except Exception as e:
-            logger.error(f"❌ Failed to download Silero VAD: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-
-        # Download multilingual turn detector models using plugin API
-        try:
-            logger.info("⏬ Downloading multilingual turn detector models...")
-            from livekit.plugins import turn_detector
-            from livekit.agents import Plugin
-
-            # Get the registered plugins (it's a list property, not a method)
-            plugins = Plugin.registered_plugins
-            logger.info(f"Found {len(plugins)} registered plugins")
-
-            for plugin in plugins:
-                logger.info(f"Checking plugin: {plugin.package}")
-                if 'turn_detector' in plugin.package:
-                    logger.info(f"Found turn detector plugin: {plugin.package}")
-                    plugin.download_files()
-                    logger.info("✅ Multilingual turn detector models downloaded")
-                    break
-            else:
-                logger.warning("⚠️ Turn detector plugin not found in registered plugins")
-
-        except Exception as e:
-            logger.error(f"❌ Failed to download turn detector: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-
-        # Download Deepgram and Cartesia models (they don't need pre-download, API-based)
-        logger.info("ℹ️ Deepgram and Cartesia are API-based, no pre-download needed")
-
-        logger.info("✅ All models downloaded successfully!")
-        sys.exit(0)
-
-    # Normal agent startup
+    # Model pre-download is handled at Docker build time via explicit
+    # `python -c` invocations in the Dockerfile (see Dockerfile).
+    # Normal agent startup:
     cli.run_app(WorkerOptions(
         shutdown_process_timeout=5,
         entrypoint_fnc=entrypoint,
