@@ -166,6 +166,28 @@ The project includes Docker containerization:
 
 # НОВЫЕ ТРЕБОВАНИЯ
 
+### [2026-05-19] player_state + tool calling (инвентарь/внешний вид/статусы + skill checks)
+**Описание**: Ведущему включён полноценный tool calling. Появилось три function_tool: `update_player_state(new_state, reason)` — переписывает целиком freeform-текст состояния игрока (инвентарь, внешний вид, статусы) и сохраняет в `games.player_state` через `PATCH /api/v1/games/{game_id}/player-state`; `skill_check(description, difficulty)` — d20 vs DC (easy=8/medium=12/hard=16/very_hard=20) с outcome critical_success/success/failure/critical_failure; `roll_dice(sides=20)` — простой бросок. Каждый вызов tool'а публикуется в data channel под топиком `agent_event` (`{type, tool, payload, ts}`) — фронт логирует в console.log для дебага.
+**Приоритет**: высокий
+**Влияет на сервисы**: lk-agent (новые tools, обновлённый промпт), story-api (новая колонка `games.player_state` + PATCH-эндпоинт), story-front (console-логгер agent_event)
+**Voice pipeline changes**: нет
+**API integrations**: новый `PATCH /api/v1/games/{game_id}/player-state`; ответ `GET /api/v1/games/{game_id}` теперь включает `player_state: str`
+**Backwards compatibility**: поле `player_state` имеет `DEFAULT ''`; старые игры открываются как пустое состояние
+**Статус**: реализовано
+
+**Реализованные изменения**:
+- ✅ `GameData.player_state: str = ""`
+- ✅ HTTP-хелпер `patch_player_state(game_id, new_state)` (aiohttp PATCH)
+- ✅ `Assistant._build_instructions()` собирает промпт с актуальным `player_state`; жёсткий запрет упоминания tools/механики/инвентаря/кубиков в нарративе
+- ✅ `Assistant.update_llm_instructions()` пересобирает промпт после каждого `update_player_state`
+- ✅ Три `@function_tool`: `update_player_state`, `skill_check`, `roll_dice`
+- ✅ Хелпер `_publish_tool_event(tool, payload)` пушит JSON в data channel под топиком `agent_event`
+- ✅ Удалены закомментированные заглушки `roll_dice`/`check_inventory`/`save_game_state`
+
+**Operator steps на test env**:
+1. Применить миграцию story-api: `story-api/migrations/add_player_state_to_games.sql` (пользователь руками в Supabase SQL editor)
+2. Деплой story-api → story-front → lk-agent (в lk-agent — push в stage И main, см. соответствующее правило)
+
 ### [2026-05-18] Character reference picture → fal.ai edit mode
 **Описание**: `GameData` теперь содержит `character_reference_image_url` из `GET /api/v1/games/{game_id}` (новое поле в story-api). `send_to_imageGen_api()` при наличии URL переключает StoryImageGen на `provider="fal_ai"` + `model="fal-ai/flux-2/klein/9b/edit"` + `image_urls=[ref_url]`. Без URL поведение прежнее (дефолты StoryImageGen: `together_ai` + `FLUX.2-flex`).
 **Приоритет**: высокий
