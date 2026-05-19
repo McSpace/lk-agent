@@ -5,6 +5,8 @@ from aiofile import async_open as open
 from datetime import datetime
 import aiohttp
 import os
+import random
+import time
 import dotenv
 
 from livekit.agents import (
@@ -142,6 +144,7 @@ class GameData(BaseModel):
     game: Game
     user_lang: str
     turns: Optional[list[Turn]] = []
+    player_state: str = ""
 
 async def get_game_data(game_id: str) -> Optional[GameData]:
     try:
@@ -189,6 +192,23 @@ async def save_intro(game_id: str, intro: str) -> bool:
     except Exception as e:
         logger.error(f"Error saving intro: {e}")
         return False
+
+async def patch_player_state(game_id: str, new_state: str) -> Optional[str]:
+    """PATCH freeform player_state to story-api; returns persisted value or None on failure."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = f"{os.getenv('STORY_API_URL')}/api/v1/games/{game_id}/player-state"
+            async with session.patch(url, json={"player_state": new_state}) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get("player_state", new_state)
+                error_text = await response.text()
+                logger.error(f"Failed to save player_state: {response.status} - {error_text}")
+                return None
+    except Exception as e:
+        logger.error(f"Error saving player_state: {e}")
+        return None
+
 
 async def send_to_imageGen_api(message_data, turn_id, game_data: GameData):
     """Async image generation for game scene"""
@@ -305,28 +325,11 @@ class Assistant(Agent):
         # Get language from user settings
         user_lang = self._get_language_name(user_settings.language)
 
-        # Form instructions with game history
-        instructions = f"""
-        You are a text-based RPG game master. Write all responses in {user_lang}.
-        The player describes their actions, and you describe how the world reacts.
-        Keep your responses brief but engaging, always in {user_lang}.
+        # Form instructions with game history (delegated to _build_instructions —
+        # it embeds the current player_state and tool-usage rules)
+        instructions = self._build_instructions(user_lang, game_data)
 
-        You have access to game tools:
-        - roll_dice: for dice rolls during checks
-        - check_inventory: to check player's inventory
-
-        Use these tools when the player attempts actions that require checks.
-
-        Game World:
-        {game_data.world_description if game_data else 'Medieval fantasy world'}
-
-        Character:
-        {game_data.character_description if game_data else 'Unknown hero'}
-
-        {f'Current state: {game_data.latest_summary.summary_text}' if game_data and game_data.latest_summary else ''}
-        """
-
-        super().__init__(instructions=instructions.strip())
+        super().__init__(instructions=instructions)
         self.game_data = game_data
         self.ctx = ctx
         self.turn_counter = 0  # Turn counter for automatic summary generation
@@ -363,50 +366,73 @@ class Assistant(Agent):
         }
         return lang_names.get(lang_code, "English")
 
+    def _build_instructions(self, user_lang: str, game_data: Optional["GameData"]) -> str:
+        """Собирает системные инструкции ведущего. Включает игровой мир, персонажа,
+        последнее саммари и текущий freeform player_state. Запрещает упоминание
+        механики и инструментов в речи игроку."""
+        world_description = (
+            game_data.world_description if game_data else "Medieval fantasy world"
+        )
+        character_description = (
+            game_data.character_description if game_data else "Unknown hero"
+        )
+        latest_summary = ""
+        if game_data and game_data.latest_summary and game_data.latest_summary.summary_text:
+            latest_summary = (
+                f"Current state (recap):\n{game_data.latest_summary.summary_text}"
+            )
+        ps = (game_data.player_state if game_data else "") or ""
+        player_state_text = (
+            ps.strip() if ps.strip()
+            else "(empty — no items, default appearance, no statuses)"
+        )
+
+        return (
+            f"You are a text-based RPG game master. Write all responses in {user_lang}.\n"
+            "The player describes their actions; you describe how the world reacts.\n"
+            f"Keep responses brief but engaging, always in {user_lang}.\n\n"
+            f"Game World:\n{world_description}\n\n"
+            f"Character:\n{character_description}\n\n"
+            f"{latest_summary}\n\n"
+            "Player state (current possessions, appearance, status — keep this up to date):\n"
+            f"{player_state_text}\n\n"
+            "GAME MECHANICS (internal, never reveal to the player):\n"
+            "- You silently maintain a freeform 'player state' describing the\n"
+            "  character's inventory, appearance and statuses. Whenever the story\n"
+            "  changes any of that (picks up / loses an item, dons a disguise,\n"
+            "  gets wounded, becomes invisible, gets tired, …) you must update it\n"
+            "  by calling update_player_state with the FULL new state — not a diff.\n"
+            "- You can resolve risky actions by calling skill_check with an\n"
+            "  appropriate difficulty (easy / medium / hard / very_hard).\n"
+            "- You can call roll_dice when raw randomness is needed.\n\n"
+            "STRICT NARRATIVE RULES:\n"
+            "- NEVER mention tools, functions, 'inventory', 'state', 'checks',\n"
+            "  dice, rolls, DCs or any meta-game vocabulary in your spoken response.\n"
+            "- The player must only hear in-world narration. If a skill check\n"
+            "  fails, describe what goes wrong narratively. When you update state,\n"
+            "  weave the change into the story ('you tuck the rusted key into\n"
+            "  your belt').\n"
+            "- Do not announce that you are using any capability. Just act."
+        ).strip()
+
     async def update_llm_instructions(self):
-        """Updates LLM instructions with current language using update_chat_ctx to modify existing context"""
+        """Rebuilds the system instructions (language, recap, current player_state)
+        and applies them to the LLM. Called on language switch and after each
+        player_state mutation."""
         try:
             user_lang = self._get_language_name(self.voice_settings.language)
-
-            # Recreate instructions with updated language
-            updated_instructions = f"""
-            You are a text-based RPG game master. Write all responses in {user_lang}.
-            The player describes their actions, and you describe how the world reacts.
-            Keep your responses brief but engaging, always in {user_lang}.
-
-            You have access to game tools:
-            - roll_dice: for dice rolls during checks
-            - check_inventory: to check player's inventory
-
-            Use these tools when the player attempts actions that require checks.
-
-            Game World:
-            {self.game_data.world_description if self.game_data else 'Medieval fantasy world'}
-
-            Character:
-            {self.game_data.character_description if self.game_data else 'Unknown hero'}
-
-            {f'Current state: {self.game_data.latest_summary.summary_text}' if self.game_data and self.game_data.latest_summary else ''}
-            """.strip()
-
-            logger.info(f"🔄 Updating instructions for language switch to: {user_lang}")
-
-            # Use only update_instructions() - it might work correctly after all
-            await self.update_instructions(updated_instructions)
-            logger.info(f"✅ Instructions updated via update_instructions() for language: {user_lang}")
-
-            # Disable complex logic with chat context for now due to ReadOnlyChatContext issues
-            # TODO: Research proper way to work with ReadOnlyChatContext in LiveKit 1.x
-            logger.info(f"📝 Using simplified approach with update_instructions() only")
-
+            new_instructions = self._build_instructions(user_lang, self.game_data)
+            ps_len = len(self.game_data.player_state) if self.game_data else 0
+            logger.info(
+                f"🔄 Updating instructions (lang={user_lang}, player_state_len={ps_len})"
+            )
+            await self.update_instructions(new_instructions)
+            logger.info("✅ Instructions updated via update_instructions()")
         except Exception as e:
-            logger.error(f"❌ Failed to update chat context: {e}")
+            logger.error(f"❌ Failed to update instructions: {e}")
             import traceback
             logger.error(f"🔍 Traceback: {traceback.format_exc()}")
-
-            # Fallback - store instructions for manual processing in llm_node
-            self.updated_instructions = updated_instructions
-            logger.info(f"🔄 Fallback: storing instructions for manual llm_node processing")
+            self.updated_instructions = None
 
     async def recreate_stt_component(self):
         """Recreates STT component with new language settings"""
@@ -795,42 +821,92 @@ class Assistant(Agent):
 
     # Old methods with delays removed - using event model
 
-    # Temporarily disable function tools for diagnostics
-    # @function_tool
-    # async def roll_dice(self, context: RunContext, sides: int = 20):
-    #     """
-    #     Rolls dice to determine action outcomes.
-    #
-    #     Args:
-    #         sides: Number of dice faces (default 20)
-    #     """
-    #     import random
-    #     result = random.randint(1, sides)
-    #     logger.info(f"🎲 Dice roll: {result} (d{sides})")
-    #
-    #     return f"Dice roll d{sides} result: {result}"
+    async def _publish_tool_event(self, tool: str, payload: dict):
+        """Publishes a tool-call event to the data channel under topic 'agent_event'.
+        The frontend logs it to console.log for debugging."""
+        try:
+            msg = json.dumps({
+                "type": "tool_event",
+                "tool": tool,
+                "payload": payload,
+                "ts": time.time(),
+            }, ensure_ascii=False)
+            await self.ctx.room.local_participant.publish_data(
+                msg.encode("utf-8"), reliable=True, topic="agent_event",
+            )
+            logger.info(f"📡 agent_event published: tool={tool}")
+        except Exception as e:
+            logger.error(f"❌ publish_data(agent_event) failed: {e}")
 
-    # @function_tool
-    # async def check_inventory(self, context: RunContext):
-    #     """
-    #     Shows player inventory.
-    #     """
-    #     logger.info("🎒 Checking player inventory")
-    #
-    #     return "In your inventory: sword, healing potion, 50 gold coins, torch"
+    @function_tool
+    async def update_player_state(
+        self, context: RunContext, new_state: str, reason: str = "",
+    ) -> str:
+        """Replace the FULL player state with a new freeform description.
+        Use whenever something changes about what the character carries, wears,
+        looks like, or feels (gained/lost items, donned disguise, wounded,
+        invisible, exhausted, etc.). Always pass the COMPLETE new state, not a
+        diff. `reason` is a short note for logging (e.g. 'picked up dagger').
+        """
+        if not self.game_data or not self.game_data.game:
+            logger.error("❌ update_player_state called without game_data")
+            return "error: no game context"
 
-    # @function_tool
-    # async def save_game_state(self, context: RunContext, action_description: str):
-    #     """
-    #     Saves current game state and player action.
-    #
-    #     Args:
-    #         action_description: Player action description
-    #     """
-    #     logger.info(f"💾 Saving game state: {action_description[:50]}...")
-    #     logger.info("🛠️ Function tool executed - turn will be saved by main handler")
-    #
-    #     return f"Action '{action_description}' saved to game history"
+        game_id = str(self.game_data.game.id)
+        saved = await patch_player_state(game_id, new_state or "")
+        if saved is None:
+            return "error: failed to persist"
+
+        self.game_data.player_state = saved
+        await self._publish_tool_event(
+            tool="update_player_state",
+            payload={"player_state": saved, "reason": reason},
+        )
+        # Rebuild system instructions so the next turn sees the fresh state
+        await self.update_llm_instructions()
+        logger.info(f"🎒 player_state updated ({len(saved)} chars), reason='{reason}'")
+        return "ok"
+
+    @function_tool
+    async def skill_check(
+        self, context: RunContext, description: str, difficulty: str = "medium",
+    ) -> str:
+        """Roll a d20 against a difficulty class to resolve a risky action.
+        `difficulty`: easy | medium | hard | very_hard. Returns roll/dc/outcome
+        as JSON — narrate the outcome in-world only, never mention numbers."""
+        dc_table = {"easy": 8, "medium": 12, "hard": 16, "very_hard": 20}
+        dc = dc_table.get((difficulty or "medium").lower(), 12)
+        roll = random.randint(1, 20)
+        if roll == 20:
+            outcome = "critical_success"
+        elif roll == 1:
+            outcome = "critical_failure"
+        elif roll >= dc:
+            outcome = "success"
+        else:
+            outcome = "failure"
+        result = {
+            "description": description,
+            "difficulty": difficulty,
+            "roll": roll,
+            "dc": dc,
+            "outcome": outcome,
+        }
+        logger.info(f"🎲 skill_check: {result}")
+        await self._publish_tool_event(tool="skill_check", payload=result)
+        return json.dumps(result, ensure_ascii=False)
+
+    @function_tool
+    async def roll_dice(self, context: RunContext, sides: int = 20) -> str:
+        """Roll a die with N sides when narrative needs raw randomness.
+        Returns the integer result as a string; narrate in-world only."""
+        sides = max(2, int(sides) if sides else 20)
+        value = random.randint(1, sides)
+        logger.info(f"🎲 roll_dice d{sides}={value}")
+        await self._publish_tool_event(
+            tool="roll_dice", payload={"sides": sides, "value": value},
+        )
+        return str(value)
 
     async def handle_imagegen_api(self, gm_text, last_turn_id, user_text):
         """Background processing of image generation and sending"""

@@ -166,6 +166,28 @@ The project includes Docker containerization:
 
 # NEW REQUIREMENTS
 
+### [2026-05-19] player_state + tool calling (inventory/appearance/statuses + skill checks)
+**Description**: Full tool calling enabled for the GM. Three function_tools landed: `update_player_state(new_state, reason)` overwrites the freeform player_state text (inventory, appearance, statuses) and persists it via `PATCH /api/v1/games/{game_id}/player-state`; `skill_check(description, difficulty)` rolls d20 vs DC (easy=8/medium=12/hard=16/very_hard=20) with outcome critical_success/success/failure/critical_failure; `roll_dice(sides=20)` is a plain die roll. Every tool invocation is also published to the data channel under topic `agent_event` (`{type, tool, payload, ts}`) for frontend console-logging.
+**Priority**: high
+**Affects services**: lk-agent (new tools, rewritten prompt), story-api (new `games.player_state` column + PATCH endpoint), story-front (agent_event console-logger)
+**Voice pipeline changes**: no
+**API integrations**: new `PATCH /api/v1/games/{game_id}/player-state`; `GET /api/v1/games/{game_id}` response now includes `player_state: str`
+**Backwards compatibility**: `player_state` has `DEFAULT ''` — existing games open with empty state
+**Status**: implemented
+
+**Implemented changes**:
+- ✅ `GameData.player_state: str = ""`
+- ✅ HTTP helper `patch_player_state(game_id, new_state)` (aiohttp PATCH)
+- ✅ `Assistant._build_instructions()` builds the prompt with the live `player_state`; hard ban on mentioning tools/mechanics/inventory/dice in narration
+- ✅ `Assistant.update_llm_instructions()` rebuilds the prompt after every `update_player_state`
+- ✅ Three `@function_tool`s: `update_player_state`, `skill_check`, `roll_dice`
+- ✅ `_publish_tool_event(tool, payload)` helper pushes JSON to the data channel under topic `agent_event`
+- ✅ Removed the commented-out stubs `roll_dice`/`check_inventory`/`save_game_state`
+
+**Operator steps on test env**:
+1. Apply story-api migration: `story-api/migrations/add_player_state_to_games.sql` (run manually in Supabase SQL editor)
+2. Deploy story-api → story-front → lk-agent (lk-agent — push to both `stage` and `master` deploy branches)
+
 ### [2026-05-18] Character reference picture → fal.ai edit mode
 **Description**: `GameData` now carries `character_reference_image_url` from `GET /api/v1/games/{game_id}` (new field in story-api). `send_to_imageGen_api()` switches StoryImageGen to `provider="fal_ai"` + `model="fal-ai/flux-2/klein/9b/edit"` + `image_urls=[ref_url]` when the URL is present. When absent, behavior is unchanged (StoryImageGen defaults: `together_ai` + `FLUX.2-flex`).
 **Priority**: high
