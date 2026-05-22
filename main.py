@@ -58,7 +58,7 @@ def create_stt_for_language(language: str):
 def create_cartesia_tts(language: str, speed: float = 1.0):
     """
     Creates Cartesia TTS with appropriate voices for each language
-    Uses sonic-2 model for all languages
+    Uses sonic-3.5 model for all languages
     """
     # Language to Cartesia voice ID mapping
     voice_mapping = {
@@ -85,7 +85,7 @@ def create_cartesia_tts(language: str, speed: float = 1.0):
     
     try:
         tts_component = cartesia.TTS(
-            model="sonic-2",
+            model="sonic-3.5",
             language=language,
             voice=voice_id
         )

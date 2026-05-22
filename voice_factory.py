@@ -66,14 +66,14 @@ class VoiceComponentFactory:
             # )
             return cartesia.TTS(
                 language="nl",
-                model="sonic-2",
+                model="sonic-3.5",
                 voice="9e8db62d-056f-47f3-b3b6-1b05767f9176"  # Cartesia voice for Dutch
             )
 
         elif language == "fr":
             return cartesia.TTS(
                 language="fr",
-                model="sonic-2",
+                model="sonic-3.5",
                 voice="5c3c89e5-535f-43ef-b14d-f8ffe148c1f0"  # ESP voice for French
             )
             # return openai.TTS(
@@ -84,7 +84,7 @@ class VoiceComponentFactory:
         elif language == "es":
             return cartesia.TTS(
                 language="es",
-                model="sonic-2",
+                model="sonic-3.5",
                 voice="2695b6b5-5543-4be1-96d9-3967fb5e7fec"  # ESP voice for Spanish
             )
         else:

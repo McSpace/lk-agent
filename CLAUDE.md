@@ -10,7 +10,7 @@ See [Root Requirements](../CLAUDE.md#critical-platform-requirements-do-not-break
 ## Voice Processing Pipeline
 - [ ] STT (Deepgram nova-3) for speech recognition DO NOT BREAK
 - [ ] LLM (OpenAI GPT gpt-4o) for RPG game master responses
-- [ ] TTS (Cartesia sonic-2) for voice synthesis DO NOT BREAK
+- [ ] TTS (Cartesia sonic-3.5) for voice synthesis DO NOT BREAK
 - [ ] VAD (Silero) for voice activity detection
 - [ ] Turn Detection multilingual model
 
@@ -128,7 +128,7 @@ Required environment variables:
 - `STORY_API_URL` - Backend API for game data
 - `DEEPGRAM_API_KEY` - Deepgram STT API key for nova-3 model
 - `OPENAI_API_KEY` - OpenAI API key for LLM only
-- `CARTESIA_API_KEY` - Cartesia TTS API key for sonic-2 model
+- `CARTESIA_API_KEY` - Cartesia TTS API key for sonic-3.5 model
 
 ### Docker Support
 
@@ -165,6 +165,24 @@ The project includes Docker containerization:
 - Virtual environment included (`venv/` directory)
 
 # NEW REQUIREMENTS
+
+### [2026-05-22] Cartesia TTS: sonic-2 → sonic-3.5 migration
+**Description**: Cartesia is deprecating sonic-2 on 2026-06-01. Bumps `model="sonic-2"` → `model="sonic-3.5"` at all Cartesia TTS creation sites (`main.py:create_cartesia_tts`, `voice_factory.py` for every language). The 5 voice IDs are preserved — Cartesia supports them on the new model.
+**Priority**: high (deadline 2026-06-01)
+**Affects services**: lk-agent
+**Voice pipeline changes**: yes, TTS model switch; STT/VAD/LLM untouched
+**API integrations**: same Cartesia API, only the model string changed
+**Backwards compatibility**: voice IDs preserved; if tone/quality regresses, revert with a single edit back to sonic-2 before 2026-06-01
+**Status**: implemented
+
+**Implemented changes**:
+- ✅ `lk-agent/main.py` — `create_cartesia_tts()` uses `model="sonic-3.5"`
+- ✅ `lk-agent/voice_factory.py` — all three TTS factories use `model="sonic-3.5"`
+- ✅ Docs updated: lk-agent/CLAUDE.md, root CLAUDE.md (env description and TTS Pipeline)
+
+**Operator steps on test env**:
+1. After deploy, open a game in each of the 5 languages (ru, en, nl, fr, es) and listen to the first GM line for regressions in tone/latency
+2. If anything breaks, roll back: `sed -i '' 's/sonic-3.5/sonic-2/g' main.py voice_factory.py` + new commit before 2026-06-01
 
 ### [2026-05-19] player_state + tool calling (inventory/appearance/statuses + skill checks)
 **Description**: Full tool calling enabled for the GM. Three function_tools landed: `update_player_state(new_state, reason)` overwrites the freeform player_state text (inventory, appearance, statuses) and persists it via `PATCH /api/v1/games/{game_id}/player-state`; `skill_check(description, difficulty)` rolls d20 vs DC (easy=8/medium=12/hard=16/very_hard=20) with outcome critical_success/success/failure/critical_failure; `roll_dice(sides=20)` is a plain die roll. Every tool invocation is also published to the data channel under topic `agent_event` (`{type, tool, payload, ts}`) for frontend console-logging.
