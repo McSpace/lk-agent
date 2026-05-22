@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Voice Processing Pipeline
 - [ ] STT (Deepgram nova-3) для speech recognition НЕ ЛОМАТЬ
 - [ ] LLM (OpenAI GPT gpt-4o) для RPG game master responses
-- [ ] TTS (Cartesia sonic-2) для voice synthesis НЕ ЛОМАТЬ
+- [ ] TTS (Cartesia sonic-3.5) для voice synthesis НЕ ЛОМАТЬ
 - [ ] VAD (Silero) для voice activity detection
 - [ ] Turn Detection multilingual model
 
@@ -128,7 +128,7 @@ Required environment variables:
 - `STORY_API_URL` - Backend API for game data
 - `DEEPGRAM_API_KEY` - Deepgram STT API key for nova-3 model
 - `OPENAI_API_KEY` - OpenAI API key for LLM only
-- `CARTESIA_API_KEY` - Cartesia TTS API key for sonic-2 model
+- `CARTESIA_API_KEY` - Cartesia TTS API key for sonic-3.5 model
 
 ### Docker Support
 
@@ -165,6 +165,24 @@ The project includes Docker containerization:
 - Virtual environment included (`venv/` directory)
 
 # НОВЫЕ ТРЕБОВАНИЯ
+
+### [2026-05-22] Cartesia TTS: переход sonic-2 → sonic-3.5
+**Описание**: Cartesia деприкейтит часть моделей с 2026-06-01. Меняем `model="sonic-2"` → `model="sonic-3.5"` во всех точках создания Cartesia TTS (`main.py:create_cartesia_tts`, `voice_factory.py` для всех языков). Voice ID'ы тех же 5 голосов сохраняются — Cartesia поддерживает их в новой модели.
+**Приоритет**: высокий (deadline 2026-06-01)
+**Влияет на сервисы**: lk-agent
+**Voice pipeline changes**: да, смена TTS-модели; STT/VAD/LLM не затронуты
+**API integrations**: тот же Cartesia API, изменена только строка модели
+**Backwards compatibility**: voice_id'ы сохраняются; в случае регресса по тембру/качеству — rollback одной правкой обратно на sonic-2 до 2026-06-01
+**Статус**: реализовано
+
+**Реализованные изменения**:
+- ✅ `lk-agent/main.py` — `create_cartesia_tts()` использует `model="sonic-3.5"`
+- ✅ `lk-agent/voice_factory.py` — все три фабрики TTS используют `model="sonic-3.5"`
+- ✅ Документация обновлена: lk-agent/CLAUDE.md, корневой CLAUDE.md (env-описание и TTS Pipeline)
+
+**Operator steps на test env**:
+1. После деплоя — открыть игру на каждом из 5 языков (ru, en, nl, fr, es), послушать первую реплику ведущего на предмет регрессии по тембру/латентности
+2. В случае проблем — откат: `sed -i '' 's/sonic-3.5/sonic-2/g' main.py voice_factory.py` + новый коммит до 2026-06-01
 
 ### [2026-05-19] player_state + tool calling (инвентарь/внешний вид/статусы + skill checks)
 **Описание**: Ведущему включён полноценный tool calling. Появилось три function_tool: `update_player_state(new_state, reason)` — переписывает целиком freeform-текст состояния игрока (инвентарь, внешний вид, статусы) и сохраняет в `games.player_state` через `PATCH /api/v1/games/{game_id}/player-state`; `skill_check(description, difficulty)` — d20 vs DC (easy=8/medium=12/hard=16/very_hard=20) с outcome critical_success/success/failure/critical_failure; `roll_dice(sides=20)` — простой бросок. Каждый вызов tool'а публикуется в data channel под топиком `agent_event` (`{type, tool, payload, ts}`) — фронт логирует в console.log для дебага.
